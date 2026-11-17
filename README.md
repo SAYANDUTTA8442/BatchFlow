@@ -2,7 +2,7 @@
 
 **From Order to Audit.**
 
-BatchFlow is a planned, lightweight manufacturing operations and audit-support system for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
+BatchFlow is a lightweight manufacturing operations and audit-support system under active development for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
 > **Project status: IAM and master-data foundation implemented; inventory posting and business workflows pending.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds and CI. Stock ledger posting, production, sales, billing, dispatch and frontend workflows remain unimplemented.
 
