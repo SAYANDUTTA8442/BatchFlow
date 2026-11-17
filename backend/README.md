@@ -49,7 +49,19 @@ All routes require a bearer access token. Writes require the admin or owner role
 
 Salesmen can read only customers assigned to them. Product records must reference an active FINISHED_GOOD inventory item. Unit conversions are rejected when units have different dimensions. Master-data records do not accept opening-stock quantities; stock initialization will be implemented through the inventory ledger.
 
-## Production BOM endpoints\n\nBOM writes require the admin or owner role; reads are available to admin, owner, auditor and production roles.\n\n- GET, POST /api/production/boms\n- GET, PUT /api/production/boms/{bom_id}\n- POST /api/production/boms/{bom_id}/activate\n- POST /api/production/boms/{bom_id}/retire\n- GET /api/production/boms/{bom_id}/scale?batch_multiplier=1.5\n\nBOM versions are assigned per product under a product-row lock. Drafts can be edited; activated versions and their lines are protected by PostgreSQL triggers. Activation rejects overlapping active effective-date ranges. Component categories must match the line type, and quantities are stored in the component inventory item's base unit. Batch scaling uses Decimal and returns six-place quantities. Production posting and stock effects are not part of this BOM milestone.\n\n## Security boundary
+## Production BOM endpoints
+
+BOM writes require the admin or owner role; reads are available to admin, owner, auditor and production roles.
+
+- GET, POST /api/production/boms
+- GET, PUT /api/production/boms/{bom_id}
+- POST /api/production/boms/{bom_id}/activate
+- POST /api/production/boms/{bom_id}/retire
+- GET /api/production/boms/{bom_id}/scale?batch_multiplier=1.5
+
+BOM versions are assigned per product under a product-row lock. Drafts can be edited; activated versions and their lines are protected by PostgreSQL triggers. Activation rejects overlapping active effective-date ranges. Component categories must match the line type, and quantities are stored in the component inventory item's base unit. Batch scaling uses Decimal and returns six-place quantities. Production posting and stock effects are not part of this BOM milestone.
+
+## Security boundary
 
 Refresh-token raw values are returned only as HttpOnly cookies; only SHA-256 hashes are persisted. Consumed token hashes are retained for reuse detection. Reuse revokes the entire session family. Access JWTs are stateless and may remain valid until their 15-minute expiry after logout, as specified in ADR-008.
 
@@ -59,4 +71,4 @@ The request-scoped SQLAlchemy dependency closes the session but does not commit.
 
 ## Current implementation boundary
 
-IAM includes user/role persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, logout and a user-provisioning CLI. Master data includes inventory items, products, customers and salesman assignments, suppliers, unit conversions and the factory location. Stock ledger posting, opening balances, production, sales, billing, dispatch and frontend workflows remain unimplemented.
+IAM includes user/role persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, logout and a user-provisioning CLI. Master data includes inventory items, products, customers and salesman assignments, suppliers, unit conversions and the factory location. Stock ledger posting, opening balances and versioned BOM management are implemented. Production-run posting, sales, billing, dispatch, collections and frontend workflows remain unimplemented.

@@ -281,6 +281,8 @@ id BIGINT identity primary key; bom_id BIGINT FK → boms.id NOT NULL; inventory
 
 Unique: (bom_id, inventory_item_id). The referenced item category must match line_type. Carton capacity is product-specific packaging configuration, not a generic unit conversion.
 
+**Implemented in migration `0006_boms`:** BOM headers and lines, per-product version uniqueness, positive quantity/effective-range constraints, draft-only line/header mutation triggers, and the controlled ACTIVE-to-RETIRED transition. The API assigns versions while holding the product row lock, validates component category against line_type, rejects overlapping active effective-date ranges, and calculates scaled planned quantities with Decimal. Production-run snapshots and posting remain unimplemented.
+
 ### 6.3 production_runs
 
 | Column | Type | Constraints / notes |

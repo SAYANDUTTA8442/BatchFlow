@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related document:** [Requirements.md](../Requirements.md)
 
-> This document describes the intended full system and its design constraints. The FastAPI/PostgreSQL backend now includes IAM, master data and an initial inventory ledger: stock-adjustment and supplier purchase-receipt posting, append-only source-linked stock movements, on-hand and WAC projections, audit events, idempotency and quantity/value reconciliation. Production, sales, billing, dispatch, payments, frontend and production deployment remain pending; stock movement reversal is now implemented. See the repository README for the verified implementation boundary.
+> This document describes the intended full system and its design constraints. The FastAPI/PostgreSQL backend now includes IAM, master data, stock-adjustment and supplier purchase-receipt posting, exact-cost movement reversals, append-only source-linked stock movements, on-hand/WAC projections, audit events, idempotency, reconciliation and versioned BOM management. Production-run posting, sales, billing, dispatch, payments, frontend and production deployment remain pending. See the repository README for the verified implementation boundary.
 
 ---
 
