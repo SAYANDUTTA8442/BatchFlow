@@ -1,6 +1,6 @@
 import hashlib
 from datetime import UTC, datetime
-from decimal import Context, Decimal, ROUND_HALF_UP, localcontext
+from decimal import Decimal
 
 from fastapi import HTTPException, status
 from sqlalchemy import select
@@ -8,6 +8,16 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.domain.costing import (
+    COST_SCALE,
+    MONEY_SCALE,
+    QTY_SCALE,
+    ZERO,
+    as_decimal as _decimal,
+    issue_valuation,
+    quantize as _quantize,
+    receive_valuation,
+)
 from app.models import InventoryItem, InventoryLocation, Supplier
 from app.models.inventory import (
     AuditEvent,
@@ -20,20 +30,6 @@ from app.models.inventory import (
     StockAdjustmentLine,
     StockMovement,
 )
-
-
-QTY_SCALE = Decimal("0.000001")
-COST_SCALE = Decimal("0.000001")
-MONEY_SCALE = Decimal("0.01")
-ZERO = Decimal("0")
-
-
-def _quantize(value: Decimal, scale: Decimal) -> Decimal:
-    return value.quantize(scale, rounding=ROUND_HALF_UP)
-
-
-def _decimal(value: object) -> Decimal:
-    return value if isinstance(value, Decimal) else Decimal(str(value))
 
 
 def create_stock_adjustment(db: Session, payload, actor_user_id: int) -> StockAdjustment:
@@ -235,10 +231,9 @@ def post_stock_adjustment(
                     if delta > 0:
                         if line.unit_cost is None:
                             raise HTTPException(status_code=422, detail="Positive adjustments require unit cost")
-                        movement_unit_cost = _quantize(_decimal(line.unit_cost), COST_SCALE)
-                        extended_cost = _quantize(delta * movement_unit_cost, MONEY_SCALE)
-                        new_qty = valued_qty + delta
-                        new_value = inventory_value + extended_cost
+                        movement_unit_cost, extended_cost, new_qty, new_value, new_average = receive_valuation(
+                            delta, _decimal(line.unit_cost), valued_qty, inventory_value
+                        )
                     else:
                         issue_qty = -delta
                         if issue_qty > valued_qty:
@@ -246,25 +241,9 @@ def post_stock_adjustment(
                                 status_code=409,
                                 detail=f"Insufficient stock for item {line.inventory_item_id}",
                             )
-                        movement_unit_cost = (
-                            _quantize(inventory_value / valued_qty, COST_SCALE)
-                            if valued_qty > ZERO
-                            else ZERO
+                        movement_unit_cost, extended_cost, new_qty, new_value, new_average = issue_valuation(
+                            issue_qty, valued_qty, inventory_value
                         )
-                        if issue_qty == valued_qty:
-                            extended_cost = inventory_value
-                            new_qty = ZERO
-                            new_value = ZERO
-                        else:
-                            with localcontext(Context(prec=28, rounding=ROUND_HALF_UP)):
-                                extended_cost = _quantize(
-                                    issue_qty * (inventory_value / valued_qty), MONEY_SCALE
-                                )
-                            new_qty = valued_qty - issue_qty
-                            new_value = inventory_value - extended_cost
-                    new_average = (
-                        _quantize(new_value / new_qty, COST_SCALE) if new_qty > ZERO else ZERO
-                    )
                     balance.on_hand_qty = _quantize(on_hand + delta, QTY_SCALE)
                     balance.updated_at = now
                     valuation.valued_qty = _quantize(new_qty, QTY_SCALE)
@@ -550,12 +529,9 @@ def post_purchase_receipt(
                             detail=f"Inventory quantity projection mismatch for item {line.inventory_item_id}",
                         )
                     quantity = _quantize(_decimal(line.quantity_received), QTY_SCALE)
-                    unit_cost = _quantize(_decimal(line.unit_cost), COST_SCALE)
-                    extended_cost = _quantize(quantity * unit_cost, MONEY_SCALE)
-                    new_qty = valued_qty + quantity
-                    new_value = inventory_value + extended_cost
-                    with localcontext(Context(prec=28, rounding=ROUND_HALF_UP)):
-                        average_cost = _quantize(new_value / new_qty, COST_SCALE)
+                    unit_cost, extended_cost, new_qty, new_value, average_cost = receive_valuation(
+                        quantity, _decimal(line.unit_cost), valued_qty, inventory_value
+                    )
                     balance.on_hand_qty = _quantize(on_hand + quantity, QTY_SCALE)
                     balance.updated_at = now
                     valuation.valued_qty = _quantize(new_qty, QTY_SCALE)

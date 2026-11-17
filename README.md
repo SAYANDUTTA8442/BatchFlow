@@ -4,7 +4,7 @@
 
 BatchFlow is a lightweight manufacturing operations and audit-support system under active development for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
-> **Project status: IAM, master data, the inventory ledger/reversals, versioned BOM management, and draft production-run planning are implemented.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds, stock-adjustment, supplier purchase-receipt and exact-cost stock-movement reversal posting, append-only stock movements, on-hand and moving-WAC projections, audit events, idempotency, ledger-to-projection reconciliation and CI. Production-run posting (actual consumption/output and costing), sales, billing, dispatch, collections and frontend workflows remain unimplemented.
+> **Project status: IAM, master data, the inventory ledger/reversals, versioned BOM management, draft production planning and atomic production posting are implemented.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds, stock-adjustment, supplier purchase-receipt and exact-cost stock-movement reversal posting, append-only stock movements, on-hand and moving-WAC projections, audit events, idempotency, ledger-to-projection reconciliation and CI. Sales, billing, dispatch, collections and frontend workflows remain unimplemented.
 
 ---
 
@@ -222,7 +222,7 @@ Implementation will proceed in dependency order:
 | 3 | Master data and inventory foundation | Implemented: master data, stock adjustments/opening balances, supplier purchase receipts, append-only movement sources, balance/valuation projections, audit, idempotent posting and reconciliation |
 | 4 | Inventory ledger and reversals | Implemented: stock ledger, WAC, purchase receipts, reconciliation and exact-cost reversals |
 | 5 | Production foundation | Implemented: versioned BOMs, effective-date protection, Decimal batch scaling and BOM-based draft production plans with durable snapshots |
-| 6 | Production execution | Pending: actual material issues, finished-goods output, costing, yield and consumption variance |
+| 6 | Production execution | Implemented: actual material/packaging issues, finished-goods output, WAC costing, yield/consumption variance, idempotency and atomic audit/ledger posting |
 | 7 | Sales workflow | Pending: order submission, admin review and stock checks |
 | 8 | Billing and dispatch | Pending: GST invoice PDF and safe stock deduction |
 | 9 | Payments and costing | Pending: payment allocation, outstanding and production overhead costing |

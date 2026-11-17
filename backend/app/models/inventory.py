@@ -131,7 +131,7 @@ class StockMovement(Base):
     __tablename__ = "stock_movements"
     __table_args__ = (
         CheckConstraint(
-            "movement_type IN ('OPENING', 'ADJUSTMENT', 'RECEIPT', 'REVERSAL')",
+            "movement_type IN ('OPENING', 'ADJUSTMENT', 'RECEIPT', 'PRODUCTION_ISSUE', 'PRODUCTION_OUTPUT', 'REVERSAL')",
             name="movement_type_valid",
         ),
         CheckConstraint("quantity_delta <> 0", name="quantity_nonzero"),
@@ -139,10 +139,14 @@ class StockMovement(Base):
         CheckConstraint("extended_cost IS NULL OR extended_cost >= 0", name="extended_cost_nonnegative"),
         UniqueConstraint("stock_adjustment_line_id", name="uq_stock_movements_adjustment_line"),
         UniqueConstraint("purchase_receipt_line_id", name="uq_stock_movements_purchase_receipt_line"),
+        UniqueConstraint("production_run_line_id", name="uq_stock_movements_production_run_line"),
+        UniqueConstraint("production_run_output_id", name="uq_stock_movements_production_run_output"),
         UniqueConstraint("reverses_movement_id", name="uq_stock_movements_reversal"),
         CheckConstraint(
             "(stock_adjustment_line_id IS NOT NULL)::int + "
-            "(purchase_receipt_line_id IS NOT NULL)::int = 1",
+            "(purchase_receipt_line_id IS NOT NULL)::int + "
+            "(production_run_line_id IS NOT NULL)::int + "
+            "(production_run_output_id IS NOT NULL)::int = 1",
             name="exactly_one_source_line",
         ),
         Index("ix_stock_movements_item_location_posted", "inventory_item_id", "inventory_location_id", "posted_at"),
@@ -164,6 +168,12 @@ class StockMovement(Base):
     )
     purchase_receipt_line_id: Mapped[int | None] = mapped_column(
         ForeignKey("purchase_receipt_lines.id", name="fk_stock_movements_receipt_line", ondelete="RESTRICT")
+    )
+    production_run_line_id: Mapped[int | None] = mapped_column(
+        ForeignKey("production_run_lines.id", ondelete="RESTRICT")
+    )
+    production_run_output_id: Mapped[int | None] = mapped_column(
+        ForeignKey("production_run_outputs.id", ondelete="RESTRICT")
     )
     reverses_movement_id: Mapped[int | None] = mapped_column(
         ForeignKey("stock_movements.id", ondelete="RESTRICT")

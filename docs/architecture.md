@@ -678,3 +678,8 @@ The production module currently has two implemented capabilities:
 A draft run persists the selected BOM ID/version and scaled plan, alongside product, finished-good item, component item and unit snapshots. The production service locks the selected BOM, product and relevant inventory-item rows while validating the date and capturing the snapshots. It is a planning record only: it does not post stock movements or update inventory balance/valuation projections.
 
 Production posting is a separate transaction boundary. Actual material/packaging issues, good finished-goods output, WAC cost snapshots, overhead allocation, variances, idempotency and atomic audit/ledger effects remain future work. Do not treat a DRAFT run as physical stock consumption or production output.
+
+
+## Production execution implementation
+
+The production module now supports atomic production posting after draft planning. The service uses the shared Decimal costing domain module, the configured variance threshold and explicit stock-movement source FKs. A single transaction records component issues, damaged packaging, good finished output, WAC valuation, production cost lines, variances, audit and idempotency. Posted production records are protected by database immutability triggers. Production correction/reversal, sales, billing, dispatch and frontend workflows remain separate pending modules.

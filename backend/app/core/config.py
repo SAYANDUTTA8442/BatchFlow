@@ -1,3 +1,4 @@
+from decimal import Decimal
 from functools import lru_cache
 from typing import Literal
 
@@ -35,6 +36,9 @@ class Settings(BaseSettings):
         alias="ALLOWED_ORIGINS",
     )
     refresh_cookie_secure: bool = Field(default=False, alias="REFRESH_COOKIE_SECURE")
+    production_variance_tolerance_percent: Decimal = Field(
+        default=Decimal("3.0"), ge=0, alias="PRODUCTION_VARIANCE_TOLERANCE_PERCENT"
+    )
 
     @model_validator(mode="after")
     def validate_security_settings(self) -> "Settings":

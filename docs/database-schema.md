@@ -281,7 +281,7 @@ id BIGINT identity primary key; bom_id BIGINT FK → boms.id NOT NULL; inventory
 
 Unique: (bom_id, inventory_item_id). The referenced item category must match line_type. Carton capacity is product-specific packaging configuration, not a generic unit conversion.
 
-**Implemented in migration `0006_boms`:** BOM headers and lines, per-product version uniqueness, positive quantity/effective-range constraints, draft-only line/header mutation triggers, and the controlled ACTIVE-to-RETIRED transition. The API assigns versions while holding the product row lock, validates component category against line_type, rejects overlapping active effective-date ranges, and calculates scaled planned quantities with Decimal. **Implemented in migration `0007_production_plans`:** draft production-run headers and BOM-derived planned component snapshots. Actual consumption, outputs, cost lines and posting remain unimplemented.
+**Implemented in migration `0006_boms`:** BOM headers and lines, per-product version uniqueness, positive quantity/effective-range constraints, draft-only line/header mutation triggers, and the controlled ACTIVE-to-RETIRED transition. **Implemented in migration `0007_production_plans`:** draft production-run headers and BOM-derived planned component snapshots. **Implemented in migration `0008_production_posting`:** actual quantities, damaged packaging, variances, output records, production cost lines, WAC snapshots and production-source stock movements. The posting service performs all ledger/projection/cost/audit/idempotency changes atomically.
 
 ### 6.3 production_runs
 
@@ -898,3 +898,12 @@ Exact migration grouping may change to resolve circular foreign keys. Do not cre
 Migration `0007_production_plans` adds product SKU/name, finished-good item code/name, output-unit code, BOM ID/version, batch multiplier, scaled expected output, production date, supervisor and DRAFT lifecycle fields to `production_runs`. `production_run_lines` stores the source inventory-item FK plus line type, item code/name/base-unit snapshots, BOM quantity-per-batch snapshot and scaled planned quantity.
 
 The current migration deliberately does not create actual-quantity, variance, unit-cost, line-cost, output, or overhead-cost records. Those belong to production execution/posting and will be added with the posting implementation. The run snapshots are not recomputed from current master data or BOM records. Planning creates no stock movements and changes no inventory projections.
+
+
+### 6.7 Production posting implementation
+
+Migration `0008_production_posting` adds the finished-good inventory-item identity snapshot to production runs, actual good output, yield variance and alert snapshots, the per-run variance tolerance, total run cost, cost per good unit and wastage note. Production-run lines now retain actual and damaged quantities, consumption variance, alert, pre-issue WAC and rounded line cost. `production_run_outputs` stores one good-output record per run; `production_cost_lines` stores LABOUR, ENERGY and OTHER costs.
+
+Stock movements now accept explicit production source FKs: `production_run_line_id` for a component issue and `production_run_output_id` for finished-goods output. The exactly-one-source constraint and unique source constraints still apply. Movement types include `PRODUCTION_ISSUE` and `PRODUCTION_OUTPUT`.
+
+The production service uses the shared Decimal costing domain functions and the ADR-009 rounding policy. It locks the run, BOM, product, inventory items and item/location balance/valuation projections; validates the complete actual-line set and unit precision; issues actual quantities (including damaged packaging); values finished output at the exact rounded run cost; then commits movements, projections, run snapshots, cost lines, audit and idempotency together. Database triggers prevent updates/deletes to posted runs and mutation of their child records. Draft planning remains stock-neutral.

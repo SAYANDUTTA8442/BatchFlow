@@ -938,3 +938,14 @@ Within one database transaction, the planning service:
 The BOM row lock serializes plan creation against BOM retirement. The plan uses the BOM version and master-data snapshots captured in this transaction; later edits to product/item names or other master data do not rewrite it.
 
 No stock movement, inventory balance, inventory valuation, actual consumption, finished-good output, production cost or variance is written during planning. Those effects are reserved for the separate production-posting transaction. A DRAFT plan is not evidence that materials were issued or goods were produced.
+
+
+## 21. Production posting implementation status
+
+The production execution endpoint is `POST /api/production/runs/{run_id}/post`. It accepts exactly one actual quantity for every persisted production-run line, an actual good-output quantity, optional LABOUR/ENERGY/OTHER cost lines and an optional wastage note. Quantities are in item base units and are checked against the configured base-unit input precision. Damaged quantity is permitted only on packaging lines and is included in actual packaging issue.
+
+The implementation follows §8's transaction sequence: idempotency claim; run/BOM/product and master-item validation; deterministic item/location balance and valuation locks; projection and sufficient-stock rechecks; shared ADR-009 issue valuation; production-source issue movements; cost and variance snapshots; output record and positive production-output movement; WAC projection update; POSTED state; audit and idempotency response. The single seeded `FACTORY-01` location is used for the MVP.
+
+The variance tolerance is configurable through `PRODUCTION_VARIANCE_TOLERANCE_PERCENT` (default 3.0%) and snapshotted on the run. An alert is set only when the absolute variance percentage exceeds the snapshot threshold. Cost entries must be supplied in currency precision (two decimal places). The output valuation adds the exact rounded total run cost; the six-place movement unit cost is informational and the two-place extended cost is authoritative.
+
+The migration also adds database triggers preventing mutation of posted production runs and their child lines, outputs and cost lines. A posting failure rolls back stock movements, balance/valuation projections, output/cost records, run status, audit and idempotency claim together. Production-run reversal/correction remains a separate future workflow; no generic undo endpoint is introduced here.

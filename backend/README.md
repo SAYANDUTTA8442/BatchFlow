@@ -71,7 +71,7 @@ The request-scoped SQLAlchemy dependency closes the session but does not commit.
 
 ## Current implementation boundary
 
-IAM includes user/role persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, logout and a user-provisioning CLI. Master data includes inventory items, products, customers and salesman assignments, suppliers, unit conversions and the factory location. Stock ledger posting, opening balances and versioned BOM management are implemented. Production-run posting, sales, billing, dispatch, collections and frontend workflows remain unimplemented.
+IAM includes user/role persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, logout and a user-provisioning CLI. Master data includes inventory items, products, customers and salesman assignments, suppliers, unit conversions and the factory location. Stock ledger posting, opening balances and versioned BOM management are implemented. Sales, billing, dispatch, collections and frontend workflows remain unimplemented.
 
 
 ## Production planning endpoints
@@ -85,3 +85,15 @@ Production-run planning is restricted to the `production` role. Admin, owner, au
 The request supplies `bom_id`, `production_date` and a positive decimal `batch_multiplier`. The API snapshots product identity, finished-good item/unit, BOM version, component codes/names/base units, per-batch quantities, scaled planned quantities and expected good output. Run numbers are assigned as `PR-YYYYMMDD-<id>`.
 
 Creating a DRAFT plan does not issue raw materials, receive finished goods, update stock balances/valuation, or calculate actual consumption/cost/variance. Those operations belong to the later production-posting workflow.
+
+
+## Production execution endpoints
+
+Production posting is restricted to the `production` role. The caller must send an `Idempotency-Key` header.
+
+- `POST /api/production/runs/{run_id}/post` — post actual consumption, good output, damaged packaging and cost entries for a DRAFT run.
+- `GET /api/production/runs/{run_id}` — retrieve planned/actual quantities, variance alerts, output and cost snapshots.
+
+The post body supplies exactly one `actual_lines` entry for every planned BOM line (`line_id`, `actual_qty`, and optional `damaged_qty`), a positive `actual_good_output_qty`, optional `cost_lines` (`LABOUR`, `ENERGY`, `OTHER`) and an optional `wastage_note`. Actual quantities are expressed in each item's base unit and must respect that unit's configured input precision. The configured variance threshold defaults to 3% and can be changed with `PRODUCTION_VARIANCE_TOLERANCE_PERCENT`; the threshold is snapshotted on each run.
+
+Posting creates source-linked negative production-issue movements and one positive finished-goods output movement, updates moving-WAC projections, records cost/variance snapshots, changes the run to POSTED, and writes the audit event and idempotency response in one PostgreSQL transaction. Damaged packaging is included in actual packaging consumption and is not counted as good output. Posted runs and their child records are immutable. Any failure rolls back the entire posting.
