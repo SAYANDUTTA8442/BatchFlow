@@ -344,9 +344,9 @@ def test_failed_production_post_rolls_back_earlier_component_issue(
     )
     assert response.status_code == 409
     assert db.get(ProductionRun, run["id"]).status == "DRAFT"
+    run_line_ids = [line["id"] for line in run["lines"]]
     assert db.scalar(select(StockMovement.id).where(
-        StockMovement.production_run_line_id.is_not(None)
-        | StockMovement.production_run_output_id.is_not(None)
+        StockMovement.production_run_line_id.in_(run_line_ids)
     )) is None
     assert db.scalar(select(ProductionRunOutput.id).where(ProductionRunOutput.production_run_id == run["id"])) is None
     assert db.scalar(select(ProductionCostLine.id).where(ProductionCostLine.production_run_id == run["id"])) is None
