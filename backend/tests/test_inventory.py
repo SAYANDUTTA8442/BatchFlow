@@ -311,7 +311,7 @@ def test_purchase_receipt_post_updates_wac_and_reconciles(
         "/api/inventory/reconciliation", headers={"Authorization": f"Bearer {token}"}
     )
     assert reconciliation.status_code == 200
-    assert reconciliation.json()["is_reconciled"] is True
+    assert reconciliation.json()["is_reconciled"] is True, reconciliation.json()
 
 
 def test_purchase_receipt_post_is_idempotent(
@@ -380,6 +380,7 @@ def test_reconciliation_detects_projection_drift(
     assert opening.status_code == 201
     assert _post(client, token, opening.json()["id"], "opening-drift").status_code == 200
     valuation = db.get(InventoryValuation, (item_id, location_id))
+    original_value = valuation.inventory_value
     valuation.inventory_value = Decimal("999.00")
     db.commit()
     response = client.get(
@@ -388,6 +389,8 @@ def test_reconciliation_detects_projection_drift(
     assert response.status_code == 200
     assert response.json()["is_reconciled"] is False
     assert any(x["inventory_item_id"] == item_id for x in response.json()["mismatches"])
+    valuation.inventory_value = original_value
+    db.commit()
 
 
 
