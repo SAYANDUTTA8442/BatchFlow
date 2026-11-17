@@ -397,9 +397,13 @@ The benchmark calculation and assumptions remain governed by [Requirements.md](.
 - Protected API operations require an authenticated user.
 - Passwords are stored as secure password hashes; plaintext passwords are never stored.
 - Authentication secrets and signing keys are supplied through environment configuration, not committed to the repository.
-- Logout/session invalidation behavior must match the selected authentication mechanism.
-
-The exact token/session mechanism is an implementation decision to finalize during backend foundation work.
+- Protected API requests use the Authorization: Bearer header with a signed JWT access token.
+- Access JWT lifetime is 15 minutes. Validate signature, fixed algorithm allowlist, issuer, audience, subject, session id, issued-at and expiry.
+- Login issues a cryptographically random 256-bit opaque refresh token with a 30-day absolute session-family expiry. Store only its SHA-256 hash in auth_refresh_tokens.
+- Refresh tokens rotate on every use. Reuse of a consumed token revokes the entire session family and requires fresh login.
+- Refresh tokens are sent only in a Secure, HttpOnly, SameSite cookie scoped to the auth refresh endpoint. Access tokens remain in frontend memory; never store tokens in localStorage/sessionStorage or put them in URLs.
+- Logout revokes the session family and clears the refresh cookie. An already-issued access JWT remains valid until its 15-minute expiry; this bounded delay is explicit and acceptable for the MVP.
+- Signing keys and issuer/audience configuration are supplied through environment configuration or a secret manager, never committed to source control. Key rotation must support a bounded overlap for active access tokens.
 
 ### 9.2 Authorization
 
@@ -630,15 +634,13 @@ Minimum operational safeguards:
 
 The following details must be resolved in the relevant design/API documents before their behavior is implemented:
 
-1. **Authentication mechanism:** cookie-backed session or bearer token, including expiry and logout semantics.
 2. **Order cancellation and reservation release:** allowed states, actor permissions and stock-release timing.
 3. **Partial dispatch:** whether it is excluded from the MVP or supported with explicit remaining-quantity rules.
 4. **Invoice correction:** reversal/credit-note behavior for an already issued invoice; silent mutation is prohibited.
 5. **Payment allocation:** handling of overpayments, partial allocations and unallocated receipts.
 6. **Inventory locations:** whether the MVP uses one factory-wide stock location or models locations explicitly.
 7. **Quantity precision:** precision and rounding policy per inventory unit.
-8. **WAC timing:** exact valuation update and issue-cost rules for receipts and production consumption.
-9. **Audit retention:** required retention and access policy for the assessment prototype.
+8. **Audit retention:** required retention and access policy for the assessment prototype.
 
 Until decided, these cases must not be presented as supported features.
 
