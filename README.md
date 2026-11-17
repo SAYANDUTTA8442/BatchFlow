@@ -219,13 +219,15 @@ Implementation will proceed in dependency order:
 |---|---|---|
 | 1 | Requirements and data model | Domain model and transaction rules reviewed |
 | 2 | Backend foundation and IAM | Implemented: FastAPI, PostgreSQL/Alembic, user/role persistence, Argon2, bearer JWT, rotating refresh sessions and integration tests |
-| 3 | Master data and inventory foundation | Master data, stock adjustments/opening balances, supplier purchase receipts, append-only movement sources, balance/valuation projections, audit, idempotent posting and reconciliation implemented. Reversal and downstream stock workflows remain pending |
-| 4 | Inventory ledger and reversals | Implemented: stock ledger, WAC, purchase receipts, reconciliation and exact-cost reversals |\n| 5 | Production foundation | Implemented: versioned BOM drafts, activation/retirement, effective-date protection, exact-decimal batch scaling and immutable-source draft production plans |\n| 6 | Production execution | Production-run posting, material issues, finished-goods output, yield and consumption variance |
-| 5 | Sales workflow | Order submission, admin review and stock checks |
-| 6 | Billing and dispatch | GST invoice PDF and safe stock deduction |
-| 7 | Payments and costing | Payment allocation, outstanding and production cost |
-| 8 | Frontend and reports | Role-specific screens and report exports |
-| 9 | Verification and delivery | Benchmark passes, documentation and demo are complete |
+| 3 | Master data and inventory foundation | Implemented: master data, stock adjustments/opening balances, supplier purchase receipts, append-only movement sources, balance/valuation projections, audit, idempotent posting and reconciliation |
+| 4 | Inventory ledger and reversals | Implemented: stock ledger, WAC, purchase receipts, reconciliation and exact-cost reversals |
+| 5 | Production foundation | Implemented: versioned BOMs, effective-date protection, Decimal batch scaling and BOM-based draft production plans with durable snapshots |
+| 6 | Production execution | Pending: actual material issues, finished-goods output, costing, yield and consumption variance |
+| 7 | Sales workflow | Pending: order submission, admin review and stock checks |
+| 8 | Billing and dispatch | Pending: GST invoice PDF and safe stock deduction |
+| 9 | Payments and costing | Pending: payment allocation, outstanding and production overhead costing |
+| 10 | Frontend and reports | Pending: role-specific screens and report exports |
+| 11 | Verification and delivery | Pending: benchmark passes, documentation and demo are complete |
 
 **Implementation rule:** production and inventory correctness must be established before spending significant time on dashboard polish or stretch goals.
 
