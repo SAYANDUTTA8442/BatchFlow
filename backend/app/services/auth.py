@@ -114,13 +114,20 @@ def rotate_refresh_token(db: Session, raw_token: str) -> tuple[TokenResponse, st
                 successor_raw = create_refresh_token()
                 successor_id = uuid.uuid4()
                 token.consumed_at = now
-                token.replaced_by_token_id = successor_id
                 session.last_used_at = now
-                db.add(AuthRefreshToken(
-                    id=successor_id, session_id=session.id,
-                    token_hash=hash_refresh_token(successor_raw),
-                    expires_at=refresh_expiry(session.expires_at),
-                ))
+                # Remove the old row from the partial unique index before inserting its successor.
+                db.flush()
+                db.add(
+                    AuthRefreshToken(
+                        id=successor_id,
+                        session_id=session.id,
+                        token_hash=hash_refresh_token(successor_raw),
+                        expires_at=refresh_expiry(session.expires_at),
+                    )
+                )
+                db.flush()
+                token.replaced_by_token_id = successor_id
+                db.flush()
                 response = _token_response(db, user, session.id)
     if reuse_detected:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Refresh-token reuse detected; log in again")
