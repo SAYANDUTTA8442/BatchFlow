@@ -111,11 +111,7 @@ Idempotency is required for operations whose retry could create a second busines
 
 ### 4.1 Request contract
 
-The client sends an Idempotency-Key header for a supported create/post operation. The key is scoped to the authenticated actor and operation, for example:
-
-- order.submit:user:42
-- production.post:user:17
-- dispatch.post:user:8
+The client sends an Idempotency-Key header for a supported create/post operation. The server derives the actor from the authenticated principal and the operation from the route/domain operation; neither is trusted from client-supplied key text. The database uniqueness scope is the tuple (actor_user_id, operation, idempotency_key). For example, user 42 may submit key abc123 for order.submit, while user 17 may independently use the same key for production.post.
 
 The server computes a stable request hash from the validated, canonical request body and relevant operation scope. The client must not supply the hash.
 
