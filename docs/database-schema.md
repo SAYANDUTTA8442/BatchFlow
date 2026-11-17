@@ -164,7 +164,7 @@ user_roles: user_id BIGINT FK → users.id; role_id BIGINT FK → roles.id; assi
 
 Seed role codes: salesman, admin, production, auditor, owner. Multiple roles per user are supported.
 
-### 4.3 permissions and role_permissions (optional)
+### 4.5 permissions and role_permissions (optional)
 
 If permission records are stored in the database, use permissions(id, code UNIQUE, description) and role_permissions(role_id, permission_id, PRIMARY KEY(role_id, permission_id)). For the first implementation, role checks may remain in application policy code. Do not build a complex dynamic policy engine for the MVP. Record-level rules still require application-service checks.
 
@@ -746,10 +746,12 @@ These may be future extensions. Keep the initial schema small enough to understa
 
 The following are genuinely unresolved and must be decided before implementing their respective workflows:
 
-2. Invoice correction: cancellation/credit-note data model and numbering rules. The initial MVP rejects correction of an issued invoice.
-3. Unit precision: allowed input precision and rounding policy for each stocked item.
-5. Production correction: reversal/re-posting model for a posted run. The initial MVP does not expose production-run reversal.
-6. Order review history: whether a dedicated order-revision table is needed beyond audit events.
+1. Invoice correction: cancellation/credit-note data model and numbering rules. The initial MVP rejects correction of an issued invoice.
+2. Unit precision: allowed input precision and rounding policy for each stocked item.
+3. Production correction: reversal/re-posting model for a posted run. The initial MVP does not expose production-run reversal.
+4. Order review history: whether a dedicated order-revision table is needed beyond audit events.
+
+See [ADR-008](./adr/ADR-008-bearer-token-authentication.md) for the authentication decision and [ADR-009](./adr/ADR-009-wac-rounding-policy.md) for the costing/rounding policy.
 
 The following transaction and security choices are already resolved and must not be re-opened in endpoint code: reservations are created for full approved order lines and released on pre-invoice cancellation; dispatch is one full dispatch per invoice; payments must be fully allocated without over-allocation; one factory location is seeded; stock uses moving weighted-average costing with the rounding rules in §12.3 and transaction-design.md; and API authentication uses short-lived bearer JWTs with rotating, revocable refresh-token families.
 
