@@ -120,9 +120,43 @@ This is a conceptual diagram, not executable DDL.
 | last_login_at | TIMESTAMPTZ | NULL |
 | created_at / updated_at | TIMESTAMPTZ | Standard timestamps |
 
-Do not store raw access tokens, refresh tokens or passwords here. If persisted sessions are needed, create a dedicated session table containing token hashes and expiry/revocation metadata.
+Do not store raw access tokens, refresh tokens or passwords here. The MVP uses short-lived signed JWT access tokens and rotating opaque refresh tokens. Persist session families and refresh-token hashes in the dedicated tables below; raw refresh tokens are never persisted.
 
-### 4.2 roles and user_roles
+### 4.2 auth_sessions
+
+One row represents a login/session family. Revoking this row invalidates its refresh-token family. Access JWTs are stateless and expire within 15 minutes; they are not individually revoked on logout, so any already-issued access token can remain usable until its expiry.
+
+| Column | Type | Constraints / notes |
+|---|---|---|
+| id | UUID | Primary key; session-family identifier |
+| user_id | BIGINT | FK → users.id, NOT NULL |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
+| expires_at | TIMESTAMPTZ | NOT NULL; absolute session expiry, initially 30 days from login |
+| last_used_at | TIMESTAMPTZ | NOT NULL |
+| revoked_at | TIMESTAMPTZ | NULL |
+| revoke_reason | VARCHAR(40) | NULL |
+
+Index: (user_id, created_at DESC). Active session queries filter revoked_at IS NULL and expires_at > now().
+
+### 4.3 auth_refresh_tokens
+
+Each row represents one opaque refresh-token generation in a session family. Rotation consumes the old token and creates a new row; retaining consumed hashes allows refresh-token reuse detection.
+
+| Column | Type | Constraints / notes |
+|---|---|---|
+| id | UUID | Primary key |
+| session_id | UUID | FK → auth_sessions.id, NOT NULL |
+| token_hash | CHAR(64) | NOT NULL UNIQUE; lowercase hex SHA-256 digest of a cryptographically random 256-bit token |
+| issued_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
+| expires_at | TIMESTAMPTZ | NOT NULL; no later than session expiry |
+| consumed_at | TIMESTAMPTZ | NULL until rotated |
+| replaced_by_token_id | UUID | FK → auth_refresh_tokens.id, NULL until rotated |
+
+Create a partial unique index on (session_id) WHERE consumed_at IS NULL to allow only one unconsumed refresh token per session. Refresh rotation locks the session and token rows, marks the presented token consumed and inserts its successor in one transaction. If a consumed token is presented again, revoke the entire session family and require login; this is refresh-token reuse detection. Logout revokes auth_sessions and thereby all refresh tokens in the family.
+
+Do not store access JWTs. Validate JWT signature, fixed algorithm allowlist, issuer, audience, subject, session id, issued-at and expiry. The API accepts access tokens only through Authorization: Bearer. The browser stores access tokens in memory; the refresh token is delivered only in a Secure, HttpOnly, SameSite cookie scoped to the authentication refresh endpoint. Refresh/logout cookie endpoints must validate the request Origin and use same-site deployment; never put tokens in URLs or logs.
+
+### 4.4 roles and user_roles
 
 roles: id BIGINT identity primary key; code VARCHAR(40) NOT NULL UNIQUE; name VARCHAR(100) NOT NULL; description TEXT NULL.
 
@@ -513,7 +547,7 @@ Current moving weighted-average valuation projection per item/location.
 | average_unit_cost | NUMERIC(18,6) | NOT NULL DEFAULT 0 CHECK (>= 0) |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 
-Composite primary key: (inventory_item_id, inventory_location_id). This is a valuation projection, not a replacement for movement cost snapshots. Receipt and issue posting update it transactionally under the same item/location lock. WAC calculations retain internal Decimal precision; inventory_value is persisted to two decimal places and average_unit_cost to six decimal places. The transaction design must define the exact rounding point for each update. Negative stock is prohibited in the MVP. For production output, the movement records unit_cost = production_runs.cost_per_good_unit and extended_cost = production_runs.total_run_cost; the valuation projection adds the good-output quantity and total run cost atomically with the output movement.
+Composite primary key: (inventory_item_id, inventory_location_id). This is a valuation projection, not a replacement for movement cost snapshots. Receipt and issue posting update it transactionally under the same item/location lock. WAC calculations use Python Decimal with a 28-significant-digit local context; binary floating point is prohibited. Persist inventory_value and every extended_cost to two decimal places using ROUND_HALF_UP. Persist average_unit_cost and movement unit_cost to six decimal places using ROUND_HALF_UP. For receipt, first round the receipt line's extended cost to cents, add it to inventory_value, then derive average_unit_cost = inventory_value / valued_qty and round that result to six places. For issue, calculate the issue value from the unrounded ratio inventory_value / valued_qty at the 28-digit working precision, multiply by issue quantity, then round the extended issue cost to cents; subtract that rounded amount from inventory_value. If the issue depletes the entire valued quantity, use the exact remaining inventory_value as the issue extended cost to clear the valuation to zero. Recompute average_unit_cost from the resulting inventory_value / valued_qty after every posting; when valued_qty is zero, both inventory_value and average_unit_cost must be zero. Persist movement unit_cost as the six-place snapshot of the pre-movement WAC; extended_cost is the authoritative rounded transaction value. Production output adds the run's already-rounded total_run_cost and good-output quantity atomically, then recomputes WAC. Reversals use the original movement's exact quantity and extended_cost with opposite signs, not a newly recomputed historical rate; reject a reversal if it would create negative quantity or value. This rounding policy is defined in docs/transaction-design.md and tested at every boundary. Negative stock is prohibited in the MVP.
 
 ### 12.4 stock_adjustments and stock_adjustment_lines
 
@@ -712,14 +746,12 @@ These may be future extensions. Keep the initial schema small enough to understa
 
 The following are genuinely unresolved and must be decided before implementing their respective workflows:
 
-1. Authentication sessions: cookie session versus bearer token, and whether a persisted session table is required.
 2. Invoice correction: cancellation/credit-note data model and numbering rules. The initial MVP rejects correction of an issued invoice.
 3. Unit precision: allowed input precision and rounding policy for each stocked item.
-4. WAC rounding: exact intermediate precision and rounding points for receipt, issue, production output and reversal calculations. The selected method remains moving weighted average per item/location.
 5. Production correction: reversal/re-posting model for a posted run. The initial MVP does not expose production-run reversal.
 6. Order review history: whether a dedicated order-revision table is needed beyond audit events.
 
-The following transaction choices are already resolved and must not be re-opened in endpoint code: reservations are created for full approved order lines and released on pre-invoice cancellation; dispatch is one full dispatch per invoice; payments must be fully allocated without over-allocation; one factory location is seeded; and stock uses moving weighted-average costing.
+The following transaction and security choices are already resolved and must not be re-opened in endpoint code: reservations are created for full approved order lines and released on pre-invoice cancellation; dispatch is one full dispatch per invoice; payments must be fully allocated without over-allocation; one factory location is seeded; stock uses moving weighted-average costing with the rounding rules in §12.3 and transaction-design.md; and API authentication uses short-lived bearer JWTs with rotating, revocable refresh-token families.
 
 ## 19. Resolved schema-to-transaction decisions
 
@@ -758,20 +790,21 @@ Build the schema in dependency order. Keep migrations small and reviewable.
 
 1. Extensions and shared lookup/reference tables (units, roles, permissions).
 2. Users and role assignments.
-3. Inventory locations and inventory items.
-4. Products, customers, customer-salesman assignments and suppliers.
-5. Unit conversions.
-6. BOM headers and lines.
-7. Purchase receipts and lines.
-8. Sales orders and lines.
-9. Production runs, consumption lines, outputs and cost lines.
-10. Reservations.
-11. Invoice series, invoices and invoice lines.
-12. Dispatches and dispatch lines.
-13. Stock adjustments, stock movements, inventory balances and valuations.
-14. Payments and allocations.
-15. Audit events and idempotency records.
-16. Foreign-key completion, row-local CHECK constraints, partial unique indexes and query indexes.
+3. Authentication session families and refresh-token tables.
+4. Inventory locations and inventory items.
+5. Products, customers, customer-salesman assignments and suppliers.
+6. Unit conversions.
+7. BOM headers and lines.
+8. Purchase receipts and lines.
+9. Sales orders and lines.
+10. Production runs, consumption lines, outputs and cost lines.
+11. Reservations.
+12. Invoice series, invoices and invoice lines.
+13. Dispatches and dispatch lines.
+14. Stock adjustments, stock movements, inventory balances and valuations.
+15. Payments and allocations.
+16. Audit events and idempotency records.
+17. Foreign-key completion, row-local CHECK constraints, partial unique indexes and query indexes.
 
 Exact migration grouping may change to resolve circular foreign keys. Do not create all tables in one unreviewable migration.
 
