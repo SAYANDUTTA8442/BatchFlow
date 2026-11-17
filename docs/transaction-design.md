@@ -123,8 +123,8 @@ The server computes a stable request hash from the validated, canonical request 
 
 Within one database transaction:
 
-1. Attempt to insert an idempotency_records row for the scope/key.
-2. The unique constraint on (scope, idempotency_key) arbitrates concurrent requests using the same key.
+1. Attempt to insert an idempotency_records row for the authenticated actor, stable operation identifier and client key.
+2. The unique constraint on (actor_user_id, operation, idempotency_key) arbitrates concurrent requests using the same actor/operation/key tuple.
 3. If the key already exists, load its record.
 4. If request_hash differs, reject with an idempotency-key-reuse conflict.
 5. If the same request has completed, return the stored response status/body without repeating the business operation.
@@ -197,11 +197,9 @@ A reservation does not create a stock movement and does not reduce on-hand. Disp
 
 ### 5.4 Stock movement uniqueness
 
-For each source-line type, create a unique constraint/index that prevents duplicate posting. The exact constraint set depends on the source foreign-key columns in the database schema.
+The database schema defines five explicit source-line foreign keys on stock_movements. Enforce exactly one non-NULL source-line FK with a CHECK constraint, and create a partial unique index for each source FK where it is non-NULL. This gives one movement per source line even if application idempotency fails.
 
-A movement must populate exactly one source-line reference among purchase receipt line, production run line, production output, dispatch line or stock adjustment line. Reversal references the original movement and is itself a separate movement.
-
-Do not use an unvalidated generic source_type/source_id pair for physical stock movements.
+A reversal is a new movement with movement_type = REVERSAL, sourced from a dedicated stock-adjustment line, and reverses_movement_id pointing to the original movement. A partial unique index on reverses_movement_id prevents a second reversal of the same movement. The posting service verifies the same item/location, equal absolute quantity and opposite sign. Do not use a generic source_type/source_id pair for physical stock movements.
 
 ## 6. Purchase receipt posting
 
@@ -314,7 +312,7 @@ Approval is all-or-nothing. It must not reserve only some lines.
 - A SUBMITTED order may be rejected without reservation.
 - An APPROVED order may be cancelled only before invoice issuance and dispatch; cancellation must lock the order, release all ACTIVE reservations, record the reason and actor, update the order state and write an audit event atomically.
 - A REJECTED order cannot be approved without a new submission/revision workflow.
-- The initial schema's sales_orders status CHECK must be extended to include CANCELLED before this cancellation behavior is implemented.
+- The reconciled database schema includes CANCELLED in the sales_orders status CHECK. The cancellation transition must still be enforced by the service and integration tests.
 - Once an invoice is issued, order cancellation is not supported in the initial MVP. Invoice correction requires a separately designed credit-note/void workflow.
 
 ### 7.5 Reservation invariants
@@ -398,7 +396,7 @@ Within one transaction:
 14. Calculate total production cost from material/packaging issue costs plus production cost lines.
 15. Insert the positive finished-goods stock movement, with unit cost derived from the run's total cost divided by actual good output when output is greater than zero.
 16. Increase finished-goods on-hand and valuation projections.
-17. Persist run variances, cost results and POSTED state.
+17. Persist run variances, total_run_cost, cost_per_good_unit and POSTED state. The persisted total is material/packaging issue cost plus production cost lines; cost_per_good_unit is total_run_cost divided by positive actual_good_output_qty using the documented precision.
 18. Insert audit event and idempotency response.
 19. Commit.
 
@@ -794,7 +792,7 @@ Tests TX-001, TX-002, TX-003, TX-005, TX-008, TX-009, TX-010 and TX-012 are rele
 
 ## 18. Resolved MVP decisions
 
-The following decisions resolve the corresponding open items from the database schema design.
+The following decisions are reflected in the reconciled database schema and resolve the corresponding schema-design items.
 
 | Area | MVP decision | Deferred behavior |
 |---|---|---|
@@ -812,21 +810,21 @@ The following decisions resolve the corresponding open items from the database s
 
 These are project design decisions. They are not claims that the source internship specification mandates these exact implementation choices.
 
-## 19. Required database-schema follow-up
+## 19. Schema alignment status
 
-Before creating migrations, update the database schema document to reflect these decisions:
+The corresponding changes have been applied to docs/database-schema.md in commit c35253fc0cee621b83aac033ed818bc19221b5af. The schema now records:
 
-1. Add CANCELLED to the sales-order status constraint.
-2. Add a clear reservation-to-dispatch relationship or enforce matching reservation consumption through the service and transaction tests.
-3. Define the unique source-line constraints for stock movements.
-4. Add a uniqueness rule for one full dispatch per invoice in the MVP.
-5. Add an explicit persisted production-run total cost and cost-per-good-unit snapshot if reports must not depend on recomputing historical values.
-6. Clarify how production output movements affect finished-goods inventory valuation.
-7. Ensure the idempotency scope includes actor/operation and the stored result can be returned safely.
-8. Add any required source/document status and posted timestamp constraints.
-9. Define indexes supporting balance locks, reservation ATP queries and payment allocation checks.
+1. CANCELLED sales-order status and pre-invoice reservation release.
+2. An explicit reservation reference on each dispatch line, with cross-row matching enforced by the service and integration tests.
+3. Exactly-one-source-line checks and partial unique indexes for stock movement sources.
+4. One full dispatch per invoice, enforced by UNIQUE(invoice_id).
+5. Persisted production-run total cost and cost-per-good-unit snapshots.
+6. Finished-goods valuation updates tied atomically to the production-output movement.
+7. Idempotency uniqueness scoped by actor, operation and key, with request-hash verification.
+8. Posting timestamps and status/timestamp consistency requirements.
+9. Indexes for stock-balance locks, active reservation queries and payment allocation lookups.
 
-Do not start ORM implementation until these changes are reviewed. The transaction design and relational schema must agree.
+Before migrations, review the remaining decisions in database-schema.md §18, especially WAC rounding and authentication-session strategy. The two design documents must be changed together if any of these resolved MVP policies changes. ORM and migration work may begin after that focused review; do not silently reopen the resolved transaction policies in endpoint code.
 
 ## 20. Implementation sequence
 
