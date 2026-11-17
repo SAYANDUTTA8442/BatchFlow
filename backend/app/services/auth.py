@@ -51,11 +51,24 @@ def authenticate(db: Session, email: str, password: str) -> tuple[TokenResponse,
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is inactive")
         session_expiry = now + timedelta(days=SESSION_LIFETIME_DAYS)
         user.last_login_at = now
-        db.add(AuthSession(id=session_id, user_id=user.id, expires_at=session_expiry, last_used_at=now))
-        db.add(AuthRefreshToken(
-            id=uuid.uuid4(), session_id=session_id,
-            token_hash=hash_refresh_token(raw_refresh), expires_at=refresh_expiry(session_expiry),
-        ))
+        db.add(
+            AuthSession(
+                id=session_id,
+                user_id=user.id,
+                expires_at=session_expiry,
+                last_used_at=now,
+            )
+        )
+        # Persist the parent session before inserting its refresh-token child.
+        db.flush()
+        db.add(
+            AuthRefreshToken(
+                id=uuid.uuid4(),
+                session_id=session_id,
+                token_hash=hash_refresh_token(raw_refresh),
+                expires_at=refresh_expiry(session_expiry),
+            )
+        )
         user_id = user.id
     user = db.get(User, user_id)
     return _token_response(db, user, session_id), raw_refresh, session_id
