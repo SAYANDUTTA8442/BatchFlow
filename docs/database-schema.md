@@ -178,10 +178,11 @@ If permission records are stored in the database, use permissions(id, code UNIQU
 | code | VARCHAR(20) | NOT NULL UNIQUE; KG, G, L, PCS, PACKET |
 | name | VARCHAR(80) | NOT NULL |
 | dimension | VARCHAR(20) | NOT NULL; MASS, VOLUME, COUNT |
+| input_decimal_places | SMALLINT | NOT NULL CHECK (BETWEEN 0 AND 6); maximum accepted decimal places when this unit is entered |
 | is_base_unit | BOOLEAN | NOT NULL DEFAULT false |
 | is_active | BOOLEAN | NOT NULL DEFAULT true |
 
-Seed the units required by the benchmark. Choose one canonical inventory unit for each item. Generic conversion must never cross dimensions.
+Seed the units required by the benchmark. Choose one canonical inventory unit for each item. Generic conversion must never cross dimensions. Input precision is unit-configured: KG and L accept at most 3 decimal places; G, PCS, PACKET and CARTON accept whole-number input (0 decimal places). Validate the entered quantity against the selected input unit before conversion; reject excess precision rather than silently rounding. Convert accepted values to the item's canonical base unit and persist normalized quantities at NUMERIC(18,6).
 
 ### 5.2 unit_conversions
 
@@ -301,7 +302,7 @@ Unique: (bom_id, inventory_item_id). The referenced item category must match lin
 | posted_by_user_id | BIGINT | FK → users.id, NULL |
 | created_at / updated_at | TIMESTAMPTZ | Standard timestamps |
 
-A posted run is immutable. At posting, persist total_run_cost as the sum of material/packaging line costs and production cost lines, and persist cost_per_good_unit = total_run_cost / actual_good_output_qty at the documented precision. These snapshots make historical reports independent of later master-data or calculation changes. The MVP rejects zero-good-output posting when positive costs exist; therefore a posted run must have positive good output and a non-null unit-cost snapshot. A correction preserves the original run and creates a documented reversal/correction workflow; production-run reversal remains outside the initial MVP.
+A posted run is immutable. At posting, persist total_run_cost as the sum of material/packaging line costs and production cost lines, and persist cost_per_good_unit = total_run_cost / actual_good_output_qty at the documented precision. These snapshots make historical reports independent of later master-data or calculation changes. The MVP rejects zero-good-output posting when positive costs exist; therefore a posted run must have positive good output and a non-null unit-cost snapshot. A posted run may be corrected only through one linked production-run correction record and a compensating stock-adjustment document. The original run changes to REVERSED; its lines, costs and stock movements remain immutable. A replacement run is a new production_runs record linked from the correction record.
 
 ### 6.4 production_run_lines
 
@@ -391,12 +392,14 @@ Order status is not physical inventory status. Do not mark an order dispatched u
 | sku_snapshot | VARCHAR(60) | NOT NULL |
 | product_name_snapshot | VARCHAR(160) | NOT NULL |
 | hsn_snapshot | VARCHAR(20) | NULL |
-| quantity | NUMERIC(18,6) | NOT NULL CHECK (> 0), product base unit |
-| unit_price | NUMERIC(18,6) | NOT NULL CHECK (>= 0) |
+| submitted_quantity | NUMERIC(18,6) | NOT NULL CHECK (> 0); immutable normalized quantity at submission |
+| submitted_unit_price | NUMERIC(18,6) | NOT NULL CHECK (>= 0); immutable price snapshot at submission |
+| quantity | NUMERIC(18,6) | NOT NULL CHECK (> 0), product base unit; current reviewed/approved quantity |
+| unit_price | NUMERIC(18,6) | NOT NULL CHECK (>= 0); current reviewed/approved price |
 | line_taxable_value | NUMERIC(18,2) | Calculated snapshot |
 | created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 
-Order lines preserve submitted/reviewed prices and product descriptions. If admin review changes quantity or price, record an audit event and retain final approved values. Decide whether a separate order-revision table is needed after designing the review workflow.
+On submission, submitted_quantity/submitted_unit_price and the current quantity/unit_price are initialized to the same values. The submitted_* columns are immutable. Admin review may update only quantity/unit_price while the order is SUBMITTED; after approval or rejection, line values are immutable. For every review edit, append a SALES_ORDER_LINES_REVISED audit event whose before_data and after_data contain the affected line IDs and complete before/after quantity and unit-price values. The submitted_* fields preserve the original request; audit events preserve each intermediate revision. No separate order-revision table is used in the MVP.
 
 ### 8.3 order_reservations
 
@@ -438,11 +441,11 @@ One invoice per approved sales order in the initial MVP.
 | taxable_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0) |
 | cgst_total / sgst_total / igst_total | NUMERIC(18,2) | NOT NULL DEFAULT 0 CHECK (>= 0) |
 | grand_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0) |
-| status | VARCHAR(20) | Initial value ISSUED; correction policy to be finalized |
+| status | VARCHAR(20) | NOT NULL CHECK IN (ISSUED, CANCELLED); initial value ISSUED |
 | issued_at | TIMESTAMPTZ | NOT NULL |
 | issued_by_user_id | BIGINT | FK → users.id, NOT NULL |
 
-The invoice is a historical snapshot. Master-data edits must not rewrite it. Issued invoices cannot be deleted. Cancellation/credit-note representation requires a separately approved correction policy.
+The invoice is an immutable historical snapshot. Master-data edits must not rewrite it, and it cannot be deleted or edited. The MVP permits only a full cancellation represented by one linked full-value credit note, and only before any dispatch or payment allocation exists. Partial credit notes, post-dispatch returns, refunds and general GST adjustment workflows are deferred. A cancelled invoice number is never reused.
 
 ### 9.3 invoice_lines
 
@@ -462,6 +465,56 @@ The invoice is a historical snapshot. Master-data edits must not rewrite it. Iss
 | line_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0) |
 
 Line totals must reconcile with invoice header totals. Enforce this in the issuance service and integration tests; a row CHECK cannot aggregate child rows. Retailer A's benchmark invoice must total ₹7,875, with taxable value ₹7,500, CGST ₹187.50 and SGST ₹187.50.
+
+
+### 9.4 credit_note_series
+
+Serializes credit-note number allocation by financial year and series.
+
+id BIGINT identity primary key; series_code VARCHAR(30) NOT NULL; financial_year VARCHAR(9) NOT NULL; prefix VARCHAR(30) NOT NULL; next_number BIGINT NOT NULL CHECK (> 0).
+
+Unique: (series_code, financial_year). Allocate a credit-note number by locking the relevant row and incrementing it inside the cancellation transaction. A committed credit-note number is never reused.
+
+### 9.5 credit_notes
+
+One full-value credit note may cancel an invoice in the MVP.
+
+| Column | Type | Constraints / notes |
+|---|---|---|
+| id | BIGINT identity | Primary key |
+| credit_note_series_id | BIGINT | FK → credit_note_series.id, NOT NULL |
+| invoice_id | BIGINT | FK → invoices.id, NOT NULL UNIQUE |
+| credit_note_number | VARCHAR(60) | NOT NULL UNIQUE |
+| credit_note_date | DATE | NOT NULL |
+| reason | TEXT | NOT NULL |
+| taxable_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0) |
+| cgst_total / sgst_total / igst_total | NUMERIC(18,2) | NOT NULL DEFAULT 0 CHECK (>= 0) |
+| grand_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0) |
+| status | VARCHAR(20) | NOT NULL CHECK IN (ISSUED) |
+| issued_at | TIMESTAMPTZ | NOT NULL |
+| issued_by_user_id | BIGINT | FK → users.id, NOT NULL |
+
+The credit note is a full reversal of the referenced invoice, not a partial adjustment. Its header totals and tax treatment must exactly reverse the invoice header totals. One credit note per invoice is enforced by UNIQUE(invoice_id). Issue it only when the invoice has no dispatch and no payment allocations. Credit-note numbering is independent from invoice numbering.
+
+### 9.6 credit_note_lines
+
+| Column | Type | Constraints / notes |
+|---|---|---|
+| id | BIGINT identity | Primary key |
+| credit_note_id | BIGINT | FK → credit_notes.id, NOT NULL |
+| original_invoice_line_id | BIGINT | FK → invoice_lines.id, NOT NULL UNIQUE |
+| product_id | BIGINT | FK → products.id, NOT NULL |
+| sku_snapshot | VARCHAR(60) | NOT NULL |
+| description_snapshot | VARCHAR(180) | NOT NULL |
+| hsn_snapshot | VARCHAR(20) | NULL |
+| quantity | NUMERIC(18,6) | NOT NULL CHECK (> 0); exactly the original invoice-line quantity |
+| unit_price | NUMERIC(18,6) | NOT NULL CHECK (>= 0); copied from original invoice line |
+| taxable_value | NUMERIC(18,2) | NOT NULL CHECK (>= 0); exact original line value |
+| gst_rate | NUMERIC(9,4) | NOT NULL CHECK (>= 0) |
+| cgst_amount / sgst_amount / igst_amount | NUMERIC(18,2) | NOT NULL DEFAULT 0 CHECK (>= 0) |
+| line_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0); exact original line total |
+
+The credit-note service copies every invoice line without recalculation or quantity/amount edits. The set of credit-note lines must match the complete set of original invoice lines, and all line/header totals must reconcile in the transaction and integration tests.
 
 ## 10. Dispatch tables
 
@@ -556,7 +609,7 @@ Use an explicit adjustment document for opening balances and later controlled co
 stock_adjustments:
 - id BIGINT identity primary key
 - adjustment_number VARCHAR(60) NOT NULL UNIQUE
-- reason VARCHAR(30) NOT NULL CHECK IN (OPENING_BALANCE, COUNT_CORRECTION, OTHER)
+- reason VARCHAR(30) NOT NULL CHECK IN (OPENING_BALANCE, COUNT_CORRECTION, PRODUCTION_REVERSAL, OTHER)
 - note TEXT NULL
 - status VARCHAR(20) NOT NULL CHECK IN (DRAFT, POSTED)
 - created_by_user_id BIGINT FK → users.id NOT NULL
@@ -574,6 +627,24 @@ stock_adjustment_lines:
 - note TEXT NULL
 
 Posting creates stock movements linked to each adjustment line. Opening balances and initial valuation rates must use this controlled path, not direct balance updates.
+
+
+### 12.5 production_run_corrections
+
+One correction record links a posted production run to the stock-adjustment document that reverses all of its inventory movements and, optionally, to its replacement run.
+
+| Column | Type | Constraints / notes |
+|---|---|---|
+| id | BIGINT identity | Primary key |
+| original_production_run_id | BIGINT | FK → production_runs.id, NOT NULL UNIQUE |
+| reversal_stock_adjustment_id | BIGINT | FK → stock_adjustments.id, NOT NULL UNIQUE |
+| replacement_production_run_id | BIGINT | FK → production_runs.id, NULL UNIQUE until a replacement run is created |
+| reason | TEXT | NOT NULL |
+| corrected_by_user_id | BIGINT | FK → users.id, NOT NULL |
+| posted_at | TIMESTAMPTZ | NOT NULL |
+| created_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
+
+The correction is posted atomically with the reversal adjustment and all compensating movements. The original run must be POSTED and must not already have a correction. Before reversal, the service must verify that none of the run's finished-good output has been reserved or dispatched, that sufficient unreserved on-hand quantity remains to remove the output, and that reversing every affected movement will not create negative quantity or valuation. Because the MVP has no batch-level finished-goods tracking, any reservation or dispatch of the same finished-good item after the run's posting is a conservative blocker, even if other stock may have existed. Reversal movements use the original movement's exact quantity and extended_cost under ADR-009. A replacement run is a new run and is posted through the ordinary production workflow; it is never written over the original run.
 
 ## 13. Audit and idempotency tables
 
@@ -744,12 +815,12 @@ These may be future extensions. Keep the initial schema small enough to understa
 
 ## 18. Remaining decisions before migrations
 
-The following are genuinely unresolved and must be decided before implementing their respective workflows:
+The four schema decisions previously listed as open are now resolved for the MVP:
 
-1. Invoice correction: cancellation/credit-note data model and numbering rules. The initial MVP rejects correction of an issued invoice.
-2. Unit precision: allowed input precision and rounding policy for each stocked item.
-3. Production correction: reversal/re-posting model for a posted run. The initial MVP does not expose production-run reversal.
-4. Order review history: whether a dedicated order-revision table is needed beyond audit events.
+1. Invoice correction: one full-value credit note per invoice, permitted only before dispatch and payment allocation; independent credit-note numbering; no partial credit notes or post-dispatch returns.
+2. Unit precision: KG and L accept up to 3 decimal places; G, PCS, PACKET and CARTON accept whole-number input. Excess precision is rejected, not rounded; normalized quantities are stored at six decimal places.
+3. Production correction: reverse all original production stock movements through a linked PRODUCTION_REVERSAL stock adjustment, then optionally post a replacement as a new run. Block correction if output has been reserved/dispatched or any reversal would make stock/valuation negative.
+4. Order review history: immutable submitted quantity/price snapshots plus append-only before/after audit events for every review edit; no separate revision table.
 
 See [ADR-008](./adr/ADR-008-bearer-token-authentication.md) for the authentication decision and [ADR-009](./adr/ADR-009-wac-rounding-policy.md) for the costing/rounding policy.
 
@@ -762,6 +833,10 @@ This section records the relational representation of the decisions in [transact
 | Decision | Relational representation | Enforcement |
 |---|---|---|
 | Order cancellation before invoicing | CANCELLED sales-order status | Service transition guard; cancellation releases ACTIVE reservations atomically |
+| Issued invoice cancellation | credit_note_series, credit_notes, credit_note_lines; invoices.status=CANCELLED | One full credit note only; no dispatch or payment allocation; atomic reservation release and order cancellation |
+| Unit input precision | units.input_decimal_places | Reject excess input scale before conversion; KG/L=3, G/PCS/PACKET/CARTON=0 |
+| Production correction | production_run_corrections + PRODUCTION_REVERSAL stock adjustment | One correction per run; no later reservation/dispatch; reverse exact movement values; preserve original run |
+| Order review history | submitted_* snapshots + audit_events before_data/after_data | Submitted fields immutable; each review edit audited; no revision table |
 | Reservation-to-dispatch traceability | dispatch_lines.order_reservation_id | FK + unique constraint; service verifies order line, product item and full quantity match |
 | One stock movement per source line | Five explicit source-line FKs | Exactly-one-source CHECK + one partial unique index per source FK |
 | No duplicate reversal | reverses_movement_id | Partial unique index; reversal sourced by a stock-adjustment line |
@@ -801,9 +876,9 @@ Build the schema in dependency order. Keep migrations small and reviewable.
 9. Sales orders and lines.
 10. Production runs, consumption lines, outputs and cost lines.
 11. Reservations.
-12. Invoice series, invoices and invoice lines.
+12. Invoice series, invoices, invoice lines, credit-note series, credit notes and credit-note lines.
 13. Dispatches and dispatch lines.
-14. Stock adjustments, stock movements, inventory balances and valuations.
+14. Stock adjustments, production-run correction records, stock movements, inventory balances and valuations.
 15. Payments and allocations.
 16. Audit events and idempotency records.
 17. Foreign-key completion, row-local CHECK constraints, partial unique indexes and query indexes.
