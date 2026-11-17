@@ -53,7 +53,10 @@ The words MUST, MUST NOT, SHOULD and MAY express implementation requirements.
 
 - Money and quantities MUST use Python Decimal and PostgreSQL NUMERIC.
 - Binary floating-point MUST NOT be used in financial or inventory calculations.
-- Rounding points and scales MUST be explicit and covered by tests.
+- WAC calculations MUST use a 28-significant-digit Decimal local context.
+- Persist extended currency values to 2 decimal places and unit costs to 6 decimal places using ROUND_HALF_UP.
+- Recompute WAC from the rounded inventory value and valued quantity after each posting; full depletion clears quantity, value and average cost to zero.
+- Rounding boundaries MUST be explicit and covered by PostgreSQL integration tests.
 - The backend MUST recalculate authoritative totals; client-supplied totals are never trusted.
 
 ## 3. Transaction and locking conventions
@@ -250,7 +253,7 @@ V_{new}=V+(q 	imes c)
 WAC_{new}=rac{V_{new}}{Q_{new}}
 ]
 
-Keep sufficient precision internally. Round only at the documented persistence/calculation boundaries. The stored inventory value is currency precision; the stored average unit cost retains additional decimal precision.
+Use Python Decimal with a local context precision of 28 significant digits. Quantize currency values to 0.01 and persisted unit costs to 0.000001 with ROUND_HALF_UP. For a receipt, round q × c to cents as the receipt-line extended cost, add that amount to V, then compute WAC = V_new / Q_new and persist its six-place rounded value. The benchmark flour receipt remains exactly ₹2,700.00, giving Q_new = 160 kg, V_new = ₹6,900.00 and WAC = ₹43.125000/kg.
 
 For the benchmark flour:
 
@@ -400,23 +403,9 @@ If any step fails, the entire posting rolls back. No material issue may remain w
 
 ### 8.4 Material issue valuation
 
-For an issue quantity q at the current average unit cost WAC:
+For an issue quantity q, derive the working WAC from the locked valuation row as the high-precision Decimal ratio V / Q (do not use the six-place display/persisted average for the multiplication). Calculate issue_value = q × (V / Q) at the 28-significant-digit working precision, then quantize issue_value to cents using ROUND_HALF_UP. Subtract that rounded amount from V and reduce Q by q. If q exactly equals Q, set issue_value to the entire remaining V so the final valuation is exactly zero; set both valued_qty and inventory_value to zero and average_unit_cost to zero. Otherwise recompute average_unit_cost = V_new / Q_new and quantize it to six decimal places using ROUND_HALF_UP.
 
-[
-issue_value = q 	imes WAC
-]
-
-[
-Q_{new}=Q-q
-]
-
-[
-V_{new}=V-issue_value
-]
-
-The issue uses the WAC locked/read for that item/location during the posting transaction. The movement stores the unit-cost and extended-cost snapshots used by the posting.
-
-Do not recalculate a historical production run using a later WAC.
+The movement stores unit_cost as the six-place snapshot of the pre-issue WAC and extended_cost as the authoritative two-place issue value. This means quantity × displayed unit_cost may differ by a fraction of a cent from extended_cost; the extended cost is authoritative for inventory value and reconciliation. The issue uses the locked valuation row, and the stock movement, balance projection and valuation projection update in one transaction.
 
 ### 8.5 Zero output
 
@@ -799,7 +788,7 @@ The following decisions are reflected in the reconciled database schema and reso
 | Invoice | One immutable issued invoice per order | General credit-note engine |
 | Payment | Allocated payments only; no over-allocation | Unallocated receipts, refunds and allocation reversal |
 | Inventory | One seeded factory location | Multi-warehouse/bin stock |
-| WAC | Moving weighted average per item/location | FIFO/standard costing |
+| WAC | Moving weighted average per item/location; 28-digit Decimal working precision; 2-place currency and 6-place unit-cost persistence; ROUND_HALF_UP; full depletion clears value | FIFO/standard costing |
 | Zero-output run | Reject posting under MVP costing policy | Scrap/failed-batch expense policy |
 | Correction | Preserve originals; use tested reversal/adjustment operations | Generic undo of every posted document |
 | Idempotency | Required for critical post operations; proposed 30-day retention | Long-term request replay archive |
@@ -820,7 +809,7 @@ The corresponding changes have been applied to docs/database-schema.md in commit
 8. Posting timestamps and status/timestamp consistency requirements.
 9. Indexes for stock-balance locks, active reservation queries and payment allocation lookups.
 
-Before migrations, review the remaining decisions in database-schema.md §18, especially WAC rounding and authentication-session strategy. The two design documents must be changed together if any of these resolved MVP policies changes. ORM and migration work may begin after that focused review; do not silently reopen the resolved transaction policies in endpoint code.
+Before migrations, review the remaining decisions in database-schema.md §18, especially per-unit input precision, invoice correction and production correction. Bearer-token authentication and WAC rounding are resolved and documented in database-schema.md, architecture.md and the ADRs. The two design documents must be changed together if any resolved MVP policy changes. ORM and migration work may begin after that focused review; do not silently reopen the resolved transaction policies in endpoint code.
 
 ## 20. Implementation sequence
 
