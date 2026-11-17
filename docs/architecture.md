@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related document:** [Requirements.md](../Requirements.md)
 
-> This document describes the intended full system and its design constraints. A partial FastAPI/PostgreSQL backend and the initial IAM capability are implemented; business modules, frontend and deployment remain pending. See the repository README for the verified implementation boundary.
+> This document describes the intended full system and its design constraints. A partial FastAPI/PostgreSQL backend, IAM and the initial master-data capability are implemented; inventory posting, remaining business modules, frontend and production deployment remain pending. See the repository README for the verified implementation boundary.
 
 ---
 
@@ -396,7 +396,7 @@ The benchmark calculation and assumptions remain governed by [Requirements.md](.
 
 ### 9.1 Authentication
 
-The initial IAM implementation is present in `backend/app`: Argon2 password hashing, user and role persistence, 15-minute HS256 bearer JWTs with `kid`-based verification-key overlap, 256-bit opaque refresh tokens stored only as SHA-256 hashes, 30-day absolute session families, refresh rotation under row locks, reuse-triggered family revocation, Origin validation, credentialed CORS and a user-provisioning CLI. The initial integration tests exercise PostgreSQL-backed login, refresh, logout, role checks, inactive users and concurrent refresh requests. These endpoints are implemented; the complete business authorization matrix and administrative user-management interface remain pending.
+The initial IAM implementation is present in `backend/app`: Argon2 password hashing, user and role persistence, 15-minute HS256 bearer JWTs with `kid`-based verification-key overlap, 256-bit opaque refresh tokens stored only as SHA-256 hashes, 30-day absolute session families, refresh rotation under row locks, reuse-triggered family revocation, Origin validation, credentialed CORS and a user-provisioning CLI. Master-data models and role-protected endpoints now cover inventory items, products, customers and salesman assignments, suppliers, compatible unit conversions and inventory locations. PostgreSQL integration tests cover authentication, authorization, master-data validation and salesman customer scoping. The complete business authorization matrix and administrative user-management interface remain pending.
 
 
 - Protected API operations require an authenticated user.

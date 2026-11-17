@@ -4,7 +4,7 @@
 
 BatchFlow is a planned, lightweight manufacturing operations and audit-support system for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
-> **Project status: IAM implemented; business workflows pending.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, a user-provisioning CLI, health endpoints and CI. Inventory, production, sales, billing, dispatch and frontend workflows remain unimplemented.
+> **Project status: IAM and master-data foundation implemented; inventory posting and business workflows pending.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds and CI. Stock ledger posting, production, sales, billing, dispatch and frontend workflows remain unimplemented.
 
 ---
 
@@ -219,7 +219,7 @@ Implementation will proceed in dependency order:
 |---|---|---|
 | 1 | Requirements and data model | Domain model and transaction rules reviewed |
 | 2 | Backend foundation and IAM | Implemented: FastAPI, PostgreSQL/Alembic, user/role persistence, Argon2, bearer JWT, rotating refresh sessions and integration tests |
-| 3 | Master data and inventory | Masters, units and source-linked stock ledger |
+| 3 | Master data and inventory | Master-data models, migration, reference seeds and role-protected APIs implemented; stock ledger and opening-stock posting remain pending |
 | 4 | Production engine | BOM, production posting, yield and consumption variance tests |
 | 5 | Sales workflow | Order submission, admin review and stock checks |
 | 6 | Billing and dispatch | GST invoice PDF and safe stock deduction |
@@ -235,16 +235,17 @@ Implementation will proceed in dependency order:
 |---|---|
 | Product requirements | Documented in [Requirements.md](./Requirements.md) |
 | Architecture design | Documented in [docs/architecture.md](./docs/architecture.md) |
-| Database schema design | Documented; initial roles/units migration implemented. Domain schema migrations remain pending |
+| Database schema design | Documented; roles/units, IAM and master-data migrations implemented. Inventory ledger and business-document migrations remain pending |
 | Transaction design | Documented in [docs/transaction-design.md](./docs/transaction-design.md); transaction services not implemented |
 | Backend foundation | Implemented |
-| Backend API | Health and authentication endpoints implemented; business routes pending |
-| Authentication and RBAC | Login, refresh, logout, current-user endpoint and role dependency implemented; full business authorization policies pending |
+| Backend API | Health, authentication and master-data endpoints implemented; stock/business posting routes pending |
+| Authentication and RBAC | Login, refresh, logout, current-user endpoint and role dependency implemented; master-data writes are admin/owner-only and salesman customer lists are assignment-scoped |
+| Master-data API | Inventory items, products, customers, salesman assignments, suppliers, unit conversions and locations implemented |
 | Frontend application | Not implemented |
 | Production and inventory engine | Not implemented |
 | Sales, invoice and dispatch workflow | Not implemented |
 | Reports and exports | Not implemented |
-| Backend foundation tests and CI | 15 tests passing in the latest verified run; PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; benchmark workflow tests not implemented |
+| Backend tests and CI | 20 tests passing in the latest verified run; PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |
 | Local PostgreSQL environment | Docker Compose service implemented; application deployment/demo not implemented |
 
 This table will be updated as verified work is committed.

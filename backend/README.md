@@ -19,7 +19,7 @@ From the repository root:
 6. Create and activate a virtual environment: python -m venv .venv
 7. Install dependencies: python -m pip install -e ".[dev]"
 8. Apply migrations: alembic upgrade head
-9. Seed roles and units: python -m app.db.seed_reference_data
+9. Seed roles, units, kg/g conversions and the factory location: python -m app.db.seed_reference_data
 10. Create the first user: python -m app.cli.create_user --name "Factory Owner" --email owner@example.com --roles owner,admin
 11. Start the API: uvicorn app.main:app --reload
 
@@ -36,6 +36,19 @@ Protected business routes must use get_current_principal and explicit require_ro
 
 Production must use a unique secret-manager supplied JWT_SECRET_KEY and REFRESH_COOKIE_SECURE=true. ALLOWED_ORIGINS must list exact trusted frontend origins. JWT_KEY_ID identifies the active signing key; JWT_PREVIOUS_KEYS accepts comma-separated kid=secret entries during a bounded rotation overlap. Remove old keys after all tokens signed by them have expired.
 
+## Master-data endpoints
+
+All routes require a bearer access token. Writes require the admin or owner role.
+
+- GET /api/master-data/units and /unit-conversions
+- GET, POST, PUT /api/master-data/inventory-items
+- GET, POST, PUT /api/master-data/products
+- GET, POST, PUT /api/master-data/customers
+- GET, POST /api/master-data/suppliers
+- GET, POST /api/master-data/locations
+
+Salesmen can read only customers assigned to them. Product records must reference an active FINISHED_GOOD inventory item. Unit conversions are rejected when units have different dimensions. Master-data records do not accept opening-stock quantities; stock initialization will be implemented through the inventory ledger.
+
 ## Security boundary
 
 Refresh-token raw values are returned only as HttpOnly cookies; only SHA-256 hashes are persisted. Consumed token hashes are retained for reuse detection. Reuse revokes the entire session family. Access JWTs are stateless and may remain valid until their 15-minute expiry after logout, as specified in ADR-008.
@@ -46,4 +59,4 @@ The request-scoped SQLAlchemy dependency closes the session but does not commit.
 
 ## Current implementation boundary
 
-IAM includes user/role persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, logout, user provisioning CLI and PostgreSQL integration tests. Inventory, production, sales, billing, dispatch and frontend workflows remain unimplemented.
+IAM includes user/role persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, logout and a user-provisioning CLI. Master data includes inventory items, products, customers and salesman assignments, suppliers, unit conversions and the factory location. Stock ledger posting, opening balances, production, sales, billing, dispatch and frontend workflows remain unimplemented.
