@@ -15,8 +15,6 @@ from app.schemas.inventory import (
     StockAdjustmentPostRead,
     StockAdjustmentRead,
     StockMovementRead,
-    StockMovementReversalCreate,
-    StockMovementReversalRead,
 )
 from app.services.inventory import (
     create_stock_adjustment,
@@ -26,7 +24,6 @@ from app.services.inventory import (
     create_purchase_receipt,
     post_purchase_receipt,
     reconcile_inventory,
-    reverse_stock_movement,
 )
 
 
@@ -87,27 +84,3 @@ def post_receipt(
 @router.get("/reconciliation", response_model=InventoryReconciliationRead)
 def get_reconciliation(db: Db, principal: InventoryReadDep):
     return reconcile_inventory(db)
-
-
-
-@router.post(
-    "/movements/{movement_id}/reverse",
-    response_model=StockMovementReversalRead,
-)
-def reverse_movement(
-    movement_id: int,
-    payload: StockMovementReversalCreate,
-    db: Db,
-    principal: InventoryWriteDep,
-    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=160)],
-):
-    if not idempotency_key.strip():
-        raise HTTPException(status_code=400, detail="Idempotency-Key cannot be blank")
-    return reverse_stock_movement(
-        db,
-        movement_id,
-        principal.user.id,
-        idempotency_key,
-        payload.adjustment_number,
-        payload.note,
-    )

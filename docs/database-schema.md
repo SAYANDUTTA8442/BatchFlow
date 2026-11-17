@@ -610,7 +610,7 @@ Use an explicit adjustment document for opening balances and later controlled co
 stock_adjustments:
 - id BIGINT identity primary key
 - adjustment_number VARCHAR(60) NOT NULL UNIQUE
-- reason VARCHAR(30) NOT NULL CHECK IN (OPENING_BALANCE, COUNT_CORRECTION, PRODUCTION_REVERSAL, OTHER)
+- reason VARCHAR(30) NOT NULL CHECK IN (OPENING_BALANCE, COUNT_CORRECTION, PRODUCTION_REVERSAL, MOVEMENT_REVERSAL, OTHER)
 - note TEXT NULL
 - status VARCHAR(20) NOT NULL CHECK IN (DRAFT, POSTED)
 - created_by_user_id BIGINT FK → users.id NOT NULL
