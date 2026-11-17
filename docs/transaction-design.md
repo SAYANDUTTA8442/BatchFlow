@@ -58,6 +58,7 @@ The words MUST, MUST NOT, SHOULD and MAY express implementation requirements.
 - Recompute WAC from the rounded inventory value and valued quantity after each posting; full depletion clears quantity, value and average cost to zero.
 - Rounding boundaries MUST be explicit and covered by PostgreSQL integration tests.
 - The backend MUST recalculate authoritative totals; client-supplied totals are never trusted.
+- The detailed costing and rounding decision is recorded in [ADR-009](./adr/ADR-009-wac-rounding-policy.md); authentication is recorded in [ADR-008](./adr/ADR-008-bearer-token-authentication.md).
 
 ## 3. Transaction and locking conventions
 
