@@ -72,16 +72,20 @@ def create_inventory_item(db: Session, payload) -> InventoryItem:
 
 def update_inventory_item(db: Session, item_id: int, payload) -> InventoryItem:
     db.rollback()
-    with db.begin():
-        item = db.get(InventoryItem, item_id)
-        if item is None:
-            raise HTTPException(status_code=404, detail="Inventory item not found")
-        values = payload.model_dump(exclude_unset=True)
-        if "base_unit_id" in values and values["base_unit_id"] is not None:
-            _active_unit(db, values["base_unit_id"])
-        for key, value in values.items():
-            setattr(item, key, value)
-    return item
+    try:
+        with db.begin():
+            item = db.get(InventoryItem, item_id)
+            if item is None:
+                raise HTTPException(status_code=404, detail="Inventory item not found")
+            values = payload.model_dump(exclude_unset=True)
+            if "base_unit_id" in values and values["base_unit_id"] is not None:
+                _active_unit(db, values["base_unit_id"])
+            for key, value in values.items():
+                setattr(item, key, value)
+        return item
+    except IntegrityError as exc:
+        db.rollback()
+        raise _conflict(exc) from exc
 
 
 def create_product(db: Session, payload) -> Product:

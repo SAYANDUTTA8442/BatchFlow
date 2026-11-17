@@ -6,7 +6,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.db.session import get_db
-from app.models import Customer, InventoryItem, Product, Role, Unit, User
+from app.models import InventoryItem, Unit, User
 from app.services.auth import create_user
 
 
