@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related documents:** [Requirements.md](../Requirements.md) · [System Architecture](./architecture.md) · [Database Schema](./database-schema.md)
 
-> This document defines the full intended application/database behavior. Verified implementations include stock-adjustment/opening-balance posting, supplier purchase receipts, exact-cost stock movement reversals, atomic ledger/projection updates, ADR-009 moving-WAC, audit/idempotency/reconciliation, and versioned BOM lifecycle management. Production-run posting, reservations, invoice, dispatch and payment transaction services remain design-only until implemented and verified against PostgreSQL integration tests.
+> This document defines the full intended application/database behavior. Verified implementations include stock-adjustment/opening-balance posting, supplier purchase receipts, exact-cost stock movement reversals, atomic ledger/projection updates, ADR-009 moving-WAC, audit/idempotency/reconciliation, versioned BOM lifecycle management, atomic production posting and salesman-submitted sales orders. Admin order review/approval, reservations, invoice, dispatch and payment transaction services remain design-only until implemented and verified against PostgreSQL integration tests.
 
 ---
 
@@ -949,3 +949,16 @@ The implementation follows §8's transaction sequence: idempotency claim; run/BO
 The variance tolerance is configurable through `PRODUCTION_VARIANCE_TOLERANCE_PERCENT` (default 3.0%) and snapshotted on the run. An alert is set only when the absolute variance percentage exceeds the snapshot threshold. Cost entries must be supplied in currency precision (two decimal places). The output valuation adds the exact rounded total run cost; the six-place movement unit cost is informational and the two-place extended cost is authoritative.
 
 The migration also adds database triggers preventing mutation of posted production runs and their child lines, outputs and cost lines. A posting failure rolls back stock movements, balance/valuation projections, output/cost records, run status, audit and idempotency claim together. Production-run reversal/correction remains a separate future workflow; no generic undo endpoint is introduced here.
+
+
+## Sales-order submission implementation
+
+The first sales workflow slice is exposed under `/api/sales/orders`:
+
+- `POST` submits a new order; the request contains a customer and one or more distinct product/quantity lines. The client does not supply a price.
+- The service claims an idempotency key scoped to actor and `sales.order.submit`, validates customer assignment, locks the customer and product/item rows, validates active finished-good mappings and unit input precision, and snapshots the configured selling price and product identity.
+- It persists the order, lines, `SALES_ORDER_SUBMITTED` audit event and idempotency response in one transaction.
+- `GET` list/detail operations enforce salesman ownership; admin, owner and auditor can read all orders.
+- No stock reservation or physical stock movement is created by submission.
+
+Admin review, line revision auditing, ATP calculation and reservation creation are the next transaction milestone. Approval must lock/recheck finished-good balances and active reservations before committing; a pre-lock availability read is not sufficient.

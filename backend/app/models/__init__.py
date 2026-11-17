@@ -27,6 +27,7 @@ from app.models.production import (
     ProductionRunOutput,
 )
 from app.models.reference import Role, Unit
+from app.models.sales import SalesOrder, SalesOrderLine
 from app.models.user import User, UserRole
 
 __all__ = [
@@ -50,6 +51,8 @@ __all__ = [
     "PurchaseReceipt",
     "PurchaseReceiptLine",
     "Role",
+    "SalesOrder",
+    "SalesOrderLine",
     "StockAdjustment",
     "StockAdjustmentLine",
     "StockMovement",

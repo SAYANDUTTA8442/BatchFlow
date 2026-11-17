@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related documents:** [Requirements.md](../Requirements.md) · [architecture.md](./architecture.md)
 
-> This document describes both the intended schema and the verified implementation boundary. Migrations through `0006_boms` implement IAM, master data, stock adjustments, supplier purchase receipts, stock movement reversals, balance/valuation projections, audit/idempotency and versioned BOMs. Production runs, reservations, invoices, dispatch and payments remain design-only.
+> This document describes both the intended schema and the verified implementation boundary. Migrations through `0009_sales_orders` implement IAM, master data, the inventory ledger and reversals, balance/valuation projections, audit/idempotency, versioned BOMs, production planning/posting and salesman-submitted sales orders. Order review/approval, reservations, invoices, dispatch and payments remain design-only.
 
 ---
 
@@ -907,3 +907,20 @@ Migration `0008_production_posting` adds the finished-good inventory-item identi
 Stock movements now accept explicit production source FKs: `production_run_line_id` for a component issue and `production_run_output_id` for finished-goods output. The exactly-one-source constraint and unique source constraints still apply. Movement types include `PRODUCTION_ISSUE` and `PRODUCTION_OUTPUT`.
 
 The production service uses the shared Decimal costing domain functions and the ADR-009 rounding policy. It locks the run, BOM, product, inventory items and item/location balance/valuation projections; validates the complete actual-line set and unit precision; issues actual quantities (including damaged packaging); values finished output at the exact rounded run cost; then commits movements, projections, run snapshots, cost lines, audit and idempotency together. Database triggers prevent updates/deletes to posted runs and mutation of their child records. Draft planning remains stock-neutral.
+
+
+## Sales-order submission implementation boundary
+
+Migration `0009_sales_orders` implements the first sales workflow slice:
+
+- A salesman may submit an order only for a customer assigned to that salesman; an admin may enter an order when required for administration.
+- Product, finished-good item and base-unit activity are checked under row locks.
+- Submitted quantity is validated against the finished-good base unit's configured input precision.
+- The server takes the current configured product selling price; clients cannot set or override the submitted price.
+- Product SKU, name and HSN, submitted quantity and submitted unit price are persisted as source snapshots.
+- The initial reviewed values match the submitted values, and a two-place line taxable-value snapshot is calculated with `Decimal` and `ROUND_HALF_UP`.
+- Order submission is idempotent using the actor/operation/key scope and stores its result with the order and audit event in one transaction.
+- Salesmen can list and retrieve only their own orders. Admin, owner and auditor roles can read all orders; only admin and salesman roles can submit.
+- Database triggers prevent deletion, protect submitted identity/price/quantity snapshots and make reviewed orders immutable. The mutable reviewed quantity/price fields remain editable only while the order is SUBMITTED for the upcoming admin-review workflow.
+
+This migration does not implement stock checks, reservations, approval/rejection, invoice or dispatch posting. Physical inventory is unchanged by order submission.
