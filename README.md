@@ -233,8 +233,8 @@ Implementation will proceed in dependency order:
 | Artifact / capability | Status |
 |---|---|
 | Product requirements | Documented in [Requirements.md](./Requirements.md) |
-| Architecture and technology direction | Planned |
-| Database schema and migrations | Not implemented |
+| Architecture design | Documented in [docs/architecture.md](./docs/architecture.md) |
+| Database schema design | Documented in [docs/database-schema.md](./docs/database-schema.md); migrations not implemented |
 | Backend API | Not implemented |
 | Frontend application | Not implemented |
 | Authentication and RBAC | Not implemented |
@@ -257,8 +257,10 @@ This table will be updated as verified work is committed.
 ## Documentation
 
 - [Product Requirements — Requirements.md](./Requirements.md): detailed scope, functional and non-functional requirements, benchmark scenario, assumptions and acceptance tests.
+- [System Architecture — docs/architecture.md](./docs/architecture.md): proposed modules, layers, transaction boundaries, security and testing strategy.
+- [Database Schema — docs/database-schema.md](./docs/database-schema.md): proposed entities, relationships, constraints, inventory ledger and migration order.
 
-Additional architecture, data-model, setup, testing and deployment documentation will be added as implementation progresses.
+Setup, API contract, transaction-design, testing and deployment documentation will be added as implementation progresses.
 
 ---
 
