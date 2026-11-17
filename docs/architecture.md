@@ -397,7 +397,7 @@ The benchmark calculation and assumptions remain governed by [Requirements.md](.
 - Protected API operations require an authenticated user.
 - Passwords are stored as secure password hashes; plaintext passwords are never stored.
 - Authentication secrets and signing keys are supplied through environment configuration, not committed to the repository.
-- Protected API requests use the Authorization: Bearer header with a signed JWT access token.
+- Protected API requests use the Authorization: Bearer header with a signed JWT access token. See [ADR-008](./adr/ADR-008-bearer-token-authentication.md) for the complete decision and operational rules.
 - Access JWT lifetime is 15 minutes. Validate signature, fixed algorithm allowlist, issuer, audience, subject, session id, issued-at and expiry.
 - Login issues a cryptographically random 256-bit opaque refresh token with a 30-day absolute session-family expiry. Store only its SHA-256 hash in auth_refresh_tokens.
 - Refresh tokens rotate on every use. Reuse of a consumed token revokes the entire session family and requires fresh login.
@@ -563,7 +563,7 @@ Cover deterministic domain rules:
 - BOM scaling.
 - Consumption and yield variance.
 - GST calculation and tax split.
-- WAC valuation.
+- WAC valuation. See [ADR-009](./adr/ADR-009-wac-rounding-policy.md) for numeric scales, ROUND_HALF_UP boundaries and reconciliation rules.
 - Production costing.
 - Order state transitions.
 - Authorization policy helpers.
@@ -632,15 +632,13 @@ Minimum operational safeguards:
 
 ## 16. Open decisions before implementation
 
-The following details must be resolved in the relevant design/API documents before their behavior is implemented:
+The following details remain unresolved and must be decided before their behavior is implemented:
 
-2. **Order cancellation and reservation release:** allowed states, actor permissions and stock-release timing.
-3. **Partial dispatch:** whether it is excluded from the MVP or supported with explicit remaining-quantity rules.
-4. **Invoice correction:** reversal/credit-note behavior for an already issued invoice; silent mutation is prohibited.
-5. **Payment allocation:** handling of overpayments, partial allocations and unallocated receipts.
-6. **Inventory locations:** whether the MVP uses one factory-wide stock location or models locations explicitly.
-7. **Quantity precision:** precision and rounding policy per inventory unit.
-8. **Audit retention:** required retention and access policy for the assessment prototype.
+1. **Invoice correction:** reversal/credit-note behavior for an already issued invoice; silent mutation is prohibited.
+2. **Quantity precision:** permitted input precision and rounding policy per inventory unit.
+3. **Audit retention:** required retention and access policy for the assessment prototype.
+
+Order cancellation/reservation release, full-dispatch-only behavior, payment allocation policy, one-factory location and WAC rounding are already resolved in the transaction and database design documents.
 
 Until decided, these cases must not be presented as supported features.
 
