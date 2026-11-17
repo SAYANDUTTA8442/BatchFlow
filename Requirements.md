@@ -512,13 +512,13 @@ The system shall compare planned and actual consumption for each BOM component.
 
 For a positive planned quantity:
 
-`ConsumptionVariance(%) =
-rac{Actual-Planned}{Planned}	imes100`
+`ConsumptionVariance(\%) =
+\frac{Actual-Planned}{Planned}\times100`
 
 Yield variance shall be:
 
-`YieldVariance(%) =
-rac{ActualGoodOutput-ExpectedOutput}{ExpectedOutput}	imes100`
+`YieldVariance(\%) =
+\frac{ActualGoodOutput-ExpectedOutput}{ExpectedOutput}\times100`
 
 A configurable tolerance shall control variance alerts.
 
@@ -562,11 +562,11 @@ The stock ledger shall support opening balance, receipts, issues, sales/dispatch
 
 Raw/packaging stock:
 
-`Closing=Opening+Receipts-Issuespm Adjustments`
+`Closing=Opening+Receipts-Issues\pm Adjustments`
 
 Finished-goods stock:
 
-`Closing=Opening+Production-Dispatchpm Adjustments`
+`Closing=Opening+Production-Dispatch\pm Adjustments`
 
 **Acceptance criteria**
 
@@ -615,7 +615,7 @@ The system shall use weighted-average material valuation for the initial MVP.
 For an item:
 
 `WeightedAverageRate =
-rac{OpeningValue+ReceiptValue}
+\frac{OpeningValue+ReceiptValue}
 {OpeningQuantity+ReceiptQuantity}`
 
 The production run cost shall include:
@@ -630,7 +630,7 @@ The MVP shall document the overhead allocation rule. For the single-product benc
 Cost per packet:
 
 `CostPerGoodPacket =
-rac{MaterialCost+PackagingCost+AllocatedOverheads}
+\frac{MaterialCost+PackagingCost+AllocatedOverheads}
 {ActualGoodOutput}`
 
 Benchmark assumptions/calculation:
@@ -983,9 +983,9 @@ Additional derived balances:
 
 Weighted-average flour rate:
 
-[
-rac{100(42)+60(45)}{100+60}=₹43.125/kg
-]
+\[
+\frac{100(42)+60(45)}{100+60}=₹43.125/kg
+\]
 
 Material and packaging cost:
 
@@ -1000,15 +1000,15 @@ Material and packaging cost:
 
 Total production cost:
 
-[
+\[
 ₹4,055+₹1,200+₹600=₹5,855
-]
+\]
 
 Cost per good packet:
 
-[
+\[
 ₹5,855/188 approx ₹31.14
-]
+\]
 
 ### 7.5 Benchmark assumptions requiring explicit documentation
 
