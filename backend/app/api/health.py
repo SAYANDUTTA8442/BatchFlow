@@ -15,7 +15,7 @@ def liveness() -> dict[str, str]:
 
 
 @router.get("/health/ready")
-def readiness(db: Session = Depends(get_db)) -> dict[str, str]:
+def readiness(db: Session = Depends(get_db)) -> dict[str, str]:  # noqa: B008
     try:
         db.execute(text("SELECT 1"))
     except SQLAlchemyError as exc:

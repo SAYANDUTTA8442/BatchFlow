@@ -4,7 +4,7 @@
 
 BatchFlow is a planned, lightweight manufacturing operations and audit-support system for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
-> **Project status: Requirements and planning baseline.** The product requirements are documented in [Requirements.md](./Requirements.md). Application modules, deployment instructions and live workflows are not yet implemented. This README will be updated as the system is built.
+> **Project status: Backend foundation started.** Requirements and architecture are documented. A FastAPI scaffold, PostgreSQL connection layer, initial Alembic migration for shared reference tables, reference-data seeder, health endpoints and backend CI are implemented. Business workflows, authentication and frontend screens remain unimplemented.
 
 ---
 
@@ -110,14 +110,14 @@ These will be considered only after the mandatory workflows are correct:
 
 ## Technology choices
 
-The planned stack is:
+The selected implementation stack is:
 
 | Layer | Planned technology | Responsibility |
 |---|---|---|
 | Backend API | Python + FastAPI | HTTP API, validation, authentication and application services |
 | Frontend | React + TypeScript | Role-specific web interfaces and mobile-friendly order entry |
 | Database | PostgreSQL | Authoritative transactional business data |
-| Deployment | Docker Compose (planned) | Reproducible local development and demo environment |
+| Local database | Docker Compose + PostgreSQL 16 | Reproducible local development database |
 
 ### Why this stack?
 
@@ -141,18 +141,19 @@ The implementation will follow these constraints:
 
 ## Repository structure
 
-The repository is being built incrementally. The following is the intended high-level structure, not a representation of files that already exist:
+The repository is being built incrementally. The current structure includes the backend foundation below; frontend and business modules remain planned:
 
 ```text
 BatchFlow/
 ├── README.md
 ├── Requirements.md
-├── backend/                 # Planned FastAPI application
+├── backend/                 # FastAPI scaffold, models, Alembic and tests
 ├── frontend/                # Planned React + TypeScript application
 ├── database/                # Planned migrations and seed data
-├── docs/                    # Planned design note and diagrams
+├── docs/                    # Requirements, architecture and transaction design
 ├── tests/                   # Planned unit and integration tests
-└── docker-compose.yml        # Planned local development environment
+├── .github/workflows/       # Backend CI
+└── docker-compose.yml        # Local PostgreSQL development service
 ```
 
 The final structure may be refined as implementation decisions are made.
@@ -217,7 +218,7 @@ Implementation will proceed in dependency order:
 | Phase | Focus | Exit condition |
 |---|---|---|
 | 1 | Requirements and data model | Domain model and transaction rules reviewed |
-| 2 | Backend foundation | FastAPI project, PostgreSQL migrations and authentication |
+| 2 | Backend foundation | FastAPI scaffold and reference migration are in place; authentication remains to be implemented |
 | 3 | Master data and inventory | Masters, units and source-linked stock ledger |
 | 4 | Production engine | BOM, production posting, yield and consumption variance tests |
 | 5 | Sales workflow | Order submission, admin review and stock checks |
@@ -234,16 +235,17 @@ Implementation will proceed in dependency order:
 |---|---|
 | Product requirements | Documented in [Requirements.md](./Requirements.md) |
 | Architecture design | Documented in [docs/architecture.md](./docs/architecture.md) |
-| Database schema design | Documented in [docs/database-schema.md](./docs/database-schema.md); migrations not implemented |
+| Database schema design | Documented; initial roles/units migration implemented. Domain schema migrations remain pending |
 | Transaction design | Documented in [docs/transaction-design.md](./docs/transaction-design.md); transaction services not implemented |
-| Backend API | Not implemented |
+| Backend foundation | Configuration, SQLAlchemy session, reference models, seed script and health endpoints implemented |
+| Backend API | Health endpoints implemented; business API routes not implemented |
 | Frontend application | Not implemented |
 | Authentication and RBAC | Not implemented |
 | Production and inventory engine | Not implemented |
 | Sales, invoice and dispatch workflow | Not implemented |
 | Reports and exports | Not implemented |
-| Automated benchmark tests | Not implemented |
-| Deployment and demo | Not implemented |
+| Backend foundation tests and CI | Health/model tests and PostgreSQL migration CI added; benchmark workflow tests not implemented |
+| Local PostgreSQL environment | Docker Compose service implemented; application deployment/demo not implemented |
 
 This table will be updated as verified work is committed.
 
@@ -252,7 +254,7 @@ This table will be updated as verified work is committed.
 - Use only dummy benchmark data and invented demo data.
 - Do not commit real customer, supplier or company information.
 - Do not commit passwords, API keys, tokens, database credentials or private environment files.
-- Keep secrets in local environment configuration and provide a safe example configuration when the application is implemented.
+- Keep secrets in local environment configuration; tracked .env.example files contain local development defaults only. Never reuse those defaults in a shared environment.
 - Use backend authorization and audit records for sensitive business operations.
 
 ## Documentation
@@ -262,7 +264,7 @@ This table will be updated as verified work is committed.
 - [Database Schema — docs/database-schema.md](./docs/database-schema.md): proposed entities, relationships, constraints, inventory ledger and migration order.
 - [Transaction Design — docs/transaction-design.md](./docs/transaction-design.md): atomic posting protocols, row locking, idempotency, WAC valuation, reservation, dispatch, payment and rollback rules.
 
-Setup, API contract, testing and deployment documentation will be added as implementation progresses.
+Backend setup instructions are in [backend/README.md](./backend/README.md). API contracts, business workflows, benchmark tests and application deployment documentation will be added as implementation progresses.
 
 ---
 
