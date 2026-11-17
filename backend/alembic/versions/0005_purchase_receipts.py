@@ -114,23 +114,33 @@ def upgrade() -> None:
         FOR EACH ROW EXECUTE FUNCTION reject_posted_purchase_receipt_mutation();
     """)
     op.execute("""
-        CREATE FUNCTION reject_posted_purchase_receipt_line_mutation() RETURNS trigger AS $$
-        DECLARE receipt_status text;
+        CREATE FUNCTION reject_posted_purchase_receipt_line_mutation() RETURNS trigger AS $
+        DECLARE
+            receipt_status text;
+            parent_receipt_id bigint;
         BEGIN
+            IF TG_OP = 'INSERT' THEN
+                parent_receipt_id := NEW.purchase_receipt_id;
+            ELSE
+                parent_receipt_id := OLD.purchase_receipt_id;
+            END IF;
             SELECT status INTO receipt_status
             FROM purchase_receipts
-            WHERE id = COALESCE(OLD.purchase_receipt_id, NEW.purchase_receipt_id);
+            WHERE id = parent_receipt_id;
             IF receipt_status = 'POSTED' THEN
                 RAISE EXCEPTION 'Lines of posted purchase receipts are immutable'
                     USING ERRCODE = '55000';
             END IF;
-            RETURN COALESCE(NEW, OLD);
+            IF TG_OP = 'DELETE' THEN
+                RETURN OLD;
+            END IF;
+            RETURN NEW;
         END;
-        $$ LANGUAGE plpgsql;
+        $ LANGUAGE plpgsql;
     """)
     op.execute("""
         CREATE TRIGGER purchase_receipt_lines_immutable
-        BEFORE UPDATE OR DELETE ON purchase_receipt_lines
+        BEFORE INSERT OR UPDATE OR DELETE ON purchase_receipt_lines
         FOR EACH ROW EXECUTE FUNCTION reject_posted_purchase_receipt_line_mutation();
     """)
 

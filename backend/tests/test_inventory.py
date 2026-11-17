@@ -18,8 +18,6 @@ from app.models import (
     InventoryItem,
     InventoryLocation,
     InventoryValuation,
-    PurchaseReceipt,
-    PurchaseReceiptLine,
     StockMovement,
     Supplier,
     Unit,
@@ -322,10 +320,12 @@ def test_purchase_receipt_post_is_idempotent(
     second = client.post(f"/api/inventory/purchase-receipts/{receipt_id}/post", headers=headers)
     assert first.status_code == second.status_code == 200
     assert first.json() == second.json()
-    count = db.scalar(
-        select(StockMovement.id).where(StockMovement.purchase_receipt_line_id.is_not(None))
+    count = len(
+        db.scalars(
+            select(StockMovement).where(StockMovement.purchase_receipt_line_id.is_not(None))
+        ).all()
     )
-    assert count is not None
+    assert count == 1
 
 
 def test_purchase_receipt_rejects_inactive_supplier(
