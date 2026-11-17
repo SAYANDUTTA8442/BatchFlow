@@ -257,6 +257,7 @@ def test_inactive_user_cannot_login_or_refresh(
     assert session is not None
     assert session.revoked_at is not None
     assert session.revoke_reason == "inactive_user"
+    db.rollback()
 
     login_again = client.post(
         "/api/auth/login",
