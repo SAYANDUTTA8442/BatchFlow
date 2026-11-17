@@ -149,15 +149,15 @@ def activate_bom(db: Session, bom_id: int, actor_id: int) -> Bom:
             raise HTTPException(status_code=409, detail="BOM product is inactive or unavailable")
         if not bom.lines:
             raise HTTPException(status_code=409, detail="A BOM must contain at least one component")
-        overlap = db.scalar(
-            select(Bom.id).where(
-                Bom.product_id == bom.product_id,
-                Bom.status == "ACTIVE",
-                Bom.id != bom.id,
-                or_(Bom.effective_to.is_(None), Bom.effective_to >= bom.effective_from),
-                or_(bom.effective_to is None, Bom.effective_from <= bom.effective_to),
-            ).limit(1)
-        )
+        overlap_conditions = [
+            Bom.product_id == bom.product_id,
+            Bom.status == "ACTIVE",
+            Bom.id != bom.id,
+            or_(Bom.effective_to.is_(None), Bom.effective_to >= bom.effective_from),
+        ]
+        if bom.effective_to is not None:
+            overlap_conditions.append(Bom.effective_from <= bom.effective_to)
+        overlap = db.scalar(select(Bom.id).where(*overlap_conditions).limit(1))
         if overlap is not None:
             raise HTTPException(status_code=409, detail="An active BOM already covers part of this effective date range")
         bom.status = "ACTIVE"
