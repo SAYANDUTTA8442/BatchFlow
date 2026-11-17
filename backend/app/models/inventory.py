@@ -23,7 +23,7 @@ class StockAdjustment(Base):
     __table_args__ = (
         UniqueConstraint("adjustment_number", name="uq_stock_adjustments_number"),
         CheckConstraint(
-            "reason IN ('OPENING_BALANCE', 'COUNT_CORRECTION', 'PRODUCTION_REVERSAL', 'OTHER')",
+            "reason IN ('OPENING_BALANCE', 'COUNT_CORRECTION', 'PRODUCTION_REVERSAL', 'MOVEMENT_REVERSAL', 'OTHER')",
             name="reason_valid",
         ),
         CheckConstraint("status IN ('DRAFT', 'POSTED')", name="status_valid"),

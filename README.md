@@ -4,7 +4,7 @@
 
 BatchFlow is a lightweight manufacturing operations and audit-support system under active development for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
-> **Project status: IAM, master data and the initial inventory ledger are implemented.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds, stock-adjustment and supplier purchase-receipt posting, append-only stock movements, on-hand and moving-WAC projections, audit events, idempotency, ledger-to-projection reconciliation and CI. Production, sales, billing, dispatch, collections and frontend workflows remain unimplemented.
+> **Project status: IAM, master data and the initial inventory ledger are implemented.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds, stock-adjustment, supplier purchase-receipt and exact-cost stock-movement reversal posting, append-only stock movements, on-hand and moving-WAC projections, audit events, idempotency, ledger-to-projection reconciliation and CI. Production, sales, billing, dispatch, collections and frontend workflows remain unimplemented.
 
 ---
 
@@ -242,10 +242,10 @@ Implementation will proceed in dependency order:
 | Authentication and RBAC | Login, refresh, logout, current-user endpoint and role dependency implemented; master-data writes are admin/owner-only and salesman customer lists are assignment-scoped |
 | Master-data API | Inventory items, products, customers, salesman assignments, suppliers, unit conversions and locations implemented |
 | Frontend application | Not implemented |
-| Production and inventory engine | Stock-adjustment and supplier purchase-receipt ledger posting, moving-WAC valuation and projection reconciliation implemented; reversals, production issues/outputs, reservations and dispatch integration pending |
+| Production and inventory engine | Stock-adjustment and supplier purchase-receipt ledger posting, moving-WAC valuation and projection reconciliation implemented; production issues/outputs, reservations and dispatch integration pending |
 | Sales, invoice and dispatch workflow | Not implemented |
 | Reports and exports | Not implemented |
-| Backend tests and CI | 30 tests passing in the latest verified run; Ruff, PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |
+| Backend tests and CI | 34 tests passing in the latest verified run; Ruff, PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |
 | Local PostgreSQL environment | Docker Compose service implemented; application deployment/demo not implemented |
 
 This table will be updated as verified work is committed.

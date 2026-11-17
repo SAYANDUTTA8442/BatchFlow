@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related documents:** [Requirements.md](../Requirements.md) · [System Architecture](./architecture.md) · [Database Schema](./database-schema.md)
 
-> This document defines the full intended application/database behavior. The implemented inventory slice includes stock-adjustment/opening-balance creation and posting, supplier purchase-receipt creation and posting, PostgreSQL row locks, atomic ledger/balance/valuation updates, the ADR-009 moving-WAC policy, audit events, idempotency and ledger-to-projection quantity/value reconciliation. Movement reversals, reservations, production, invoice, dispatch and payment transaction services remain design-only until implemented and verified against PostgreSQL integration tests.
+> This document defines the full intended application/database behavior. The implemented inventory slice includes stock-adjustment/opening-balance creation and posting, supplier purchase-receipt creation and posting, PostgreSQL row locks, atomic ledger/balance/valuation updates, the ADR-009 moving-WAC policy, audit events, idempotency and ledger-to-projection quantity/value reconciliation. Reservations, production, invoice, dispatch and payment transaction services remain design-only until implemented and verified against PostgreSQL integration tests.
 
 ---
 
@@ -199,7 +199,7 @@ A reservation does not create a stock movement and does not reduce on-hand. Disp
 
 The database schema defines five explicit source-line foreign keys on stock_movements. Enforce exactly one non-NULL source-line FK with a CHECK constraint, and create a partial unique index for each source FK where it is non-NULL. This gives one movement per source line even if application idempotency fails.
 
-A reversal is a new movement with movement_type = REVERSAL, sourced from a dedicated stock-adjustment line, and reverses_movement_id pointing to the original movement. A partial unique index on reverses_movement_id prevents a second reversal of the same movement. The posting service verifies the same item/location, equal absolute quantity and opposite sign. Do not use a generic source_type/source_id pair for physical stock movements.
+A reversal is a new movement with movement_type = REVERSAL, sourced from a dedicated stock-adjustment line, and reverses_movement_id pointing to the original movement. A partial unique index on reverses_movement_id prevents a second reversal of the same movement. The posting service verifies the same item/location, equal absolute quantity and opposite sign. Do not use a generic source_type/source_id pair for physical stock movements. The implemented reversal endpoint locks the original movement and its balance/valuation rows, rejects reversal-of-reversal and duplicate reversals, and applies the original movement's exact extended_cost with the opposite quantity sign. It records the reversal as a posted MOVEMENT_REVERSAL stock adjustment, links the new movement through reverses_movement_id, and writes the audit event and idempotency response in the same transaction. A reversal that would make quantity or value negative—or leave value at zero quantity—is rejected.
 
 ## 6. Purchase receipt posting
 

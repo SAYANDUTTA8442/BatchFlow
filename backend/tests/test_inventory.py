@@ -388,3 +388,185 @@ def test_reconciliation_detects_projection_drift(
     assert response.status_code == 200
     assert response.json()["is_reconciled"] is False
     assert any(x["inventory_item_id"] == item_id for x in response.json()["mismatches"])
+
+
+
+def _reverse(
+    client: TestClient,
+    token: str,
+    movement_id: int,
+    adjustment_number: str,
+    key: str,
+):
+    return client.post(
+        f"/api/inventory/movements/{movement_id}/reverse",
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": key},
+        json={"adjustment_number": adjustment_number, "note": "Correction test"},
+    )
+
+
+def test_reverse_purchase_receipt_restores_exact_original_value(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    supplier = _supplier(db)
+    opening = _adjust(
+        client, token, item_id, location_id, "REV-OPEN-001", "OPENING_BALANCE", "100", "42", "unused"
+    )
+    assert opening.status_code == 201
+    assert _post(client, token, opening.json()["id"], "rev-open-001").status_code == 200
+
+    receipt = _purchase_receipt(
+        client, token, supplier.id, item_id, location_id, "REV-PR-001", "60", "45"
+    )
+    assert receipt.status_code == 201
+    posted = client.post(
+        f"/api/inventory/purchase-receipts/{receipt.json()['id']}/post",
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "rev-receipt-001"},
+    )
+    assert posted.status_code == 200
+
+    receipt_movement = db.scalar(
+        select(StockMovement).where(
+            StockMovement.inventory_item_id == item_id,
+            StockMovement.purchase_receipt_line_id.is_not(None),
+        )
+    )
+    assert receipt_movement is not None
+    response = _reverse(client, token, receipt_movement.id, "REV-ADJ-001", "reverse-receipt-001")
+    assert response.status_code == 200, response.text
+    assert response.json()["quantity_delta"] == "-60.000000"
+    assert response.json()["extended_cost"] == "2700.00"
+
+    balance = client.get("/api/inventory/balances", headers={"Authorization": f"Bearer {token}"})
+    row = next(value for value in balance.json() if value["inventory_item_id"] == item_id)
+    assert Decimal(row["on_hand_qty"]) == Decimal("100.000000")
+    assert Decimal(row["inventory_value"]) == Decimal("4200.00")
+    assert Decimal(row["average_unit_cost"]) == Decimal("42.000000")
+
+    original_after = db.get(StockMovement, receipt_movement.id)
+    reversal = db.get(StockMovement, response.json()["reversal_movement_id"])
+    assert original_after is not None and reversal is not None
+    assert original_after.quantity_delta == Decimal("60.000000")
+    assert reversal.reverses_movement_id == original_after.id
+    assert reversal.stock_adjustment_line_id is not None
+    reconciliation = client.get(
+        "/api/inventory/reconciliation", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert reconciliation.status_code == 200
+    assert reconciliation.json()["is_reconciled"] is True
+
+
+def test_reversing_an_issue_uses_original_cost_not_current_wac(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    opening = _adjust(
+        client, token, item_id, location_id, "REV-OPEN-002", "OPENING_BALANCE", "100", "42", "unused"
+    )
+    assert opening.status_code == 201
+    assert _post(client, token, opening.json()["id"], "rev-open-002").status_code == 200
+    receipt = _adjust(
+        client, token, item_id, location_id, "REV-RECEIPT-002", "OTHER", "100", "60", "unused"
+    )
+    assert receipt.status_code == 201
+    assert _post(client, token, receipt.json()["id"], "rev-receipt-002").status_code == 200
+    issue = _adjust(
+        client, token, item_id, location_id, "REV-ISSUE-002", "COUNT_CORRECTION", "-50", None, "unused"
+    )
+    assert issue.status_code == 201
+    assert _post(client, token, issue.json()["id"], "rev-issue-002").status_code == 200
+    issue_movement = db.scalar(
+        select(StockMovement).where(
+            StockMovement.inventory_item_id == item_id,
+            StockMovement.quantity_delta == Decimal("-50.000000"),
+        )
+    )
+    assert issue_movement is not None
+    assert issue_movement.extended_cost == Decimal("2550.00")
+
+    later_receipt = _adjust(
+        client, token, item_id, location_id, "REV-LATER-002", "OTHER", "100", "100", "unused"
+    )
+    assert later_receipt.status_code == 201
+    assert _post(client, token, later_receipt.json()["id"], "rev-later-002").status_code == 200
+
+    response = _reverse(client, token, issue_movement.id, "REV-ADJ-002", "reverse-issue-002")
+    assert response.status_code == 200, response.text
+    assert response.json()["quantity_delta"] == "50.000000"
+    assert response.json()["extended_cost"] == "2550.00"
+
+    balance = client.get("/api/inventory/balances", headers={"Authorization": f"Bearer {token}"})
+    row = next(value for value in balance.json() if value["inventory_item_id"] == item_id)
+    assert Decimal(row["on_hand_qty"]) == Decimal("300.000000")
+    assert Decimal(row["inventory_value"]) == Decimal("20200.00")
+    assert Decimal(row["average_unit_cost"]) == Decimal("67.333333")
+
+
+def test_stock_movement_reversal_is_idempotent_and_unique(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    opening = _adjust(
+        client, token, item_id, location_id, "REV-OPEN-003", "OPENING_BALANCE", "10", "5", "unused"
+    )
+    assert opening.status_code == 201
+    assert _post(client, token, opening.json()["id"], "rev-open-003").status_code == 200
+    movement = db.scalar(
+        select(StockMovement).where(StockMovement.inventory_item_id == item_id)
+    )
+    assert movement is not None
+
+    first = _reverse(client, token, movement.id, "REV-ADJ-003", "reverse-same-003")
+    second = _reverse(client, token, movement.id, "REV-ADJ-003", "reverse-same-003")
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    duplicate = _reverse(client, token, movement.id, "REV-ADJ-003B", "reverse-different-003")
+    assert duplicate.status_code == 409
+    assert len(
+        db.scalars(
+            select(StockMovement).where(StockMovement.reverses_movement_id == movement.id)
+        ).all()
+    ) == 1
+
+
+def test_stock_movement_reversal_rejects_insufficient_stock(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    supplier = _supplier(db)
+    opening = _adjust(
+        client, token, item_id, location_id, "REV-OPEN-004", "OPENING_BALANCE", "100", "42", "unused"
+    )
+    assert opening.status_code == 201
+    assert _post(client, token, opening.json()["id"], "rev-open-004").status_code == 200
+    receipt = _purchase_receipt(
+        client, token, supplier.id, item_id, location_id, "REV-PR-004", "60", "45"
+    )
+    assert receipt.status_code == 201
+    assert client.post(
+        f"/api/inventory/purchase-receipts/{receipt.json()['id']}/post",
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "rev-receipt-004"},
+    ).status_code == 200
+    receipt_movement = db.scalar(
+        select(StockMovement).where(
+            StockMovement.inventory_item_id == item_id,
+            StockMovement.purchase_receipt_line_id.is_not(None),
+        )
+    )
+    assert receipt_movement is not None
+    issue = _adjust(
+        client, token, item_id, location_id, "REV-ISSUE-004", "COUNT_CORRECTION", "-150", None, "unused"
+    )
+    assert issue.status_code == 201
+    assert _post(client, token, issue.json()["id"], "rev-issue-004").status_code == 200
+
+    response = _reverse(client, token, receipt_movement.id, "REV-ADJ-004", "reverse-insufficient-004")
+    assert response.status_code == 409
+    assert db.scalar(
+        select(StockMovement.id).where(StockMovement.reverses_movement_id == receipt_movement.id)
+    ) is None

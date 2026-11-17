@@ -19,7 +19,7 @@ class StockAdjustmentLineCreate(BaseModel):
 
 class StockAdjustmentCreate(BaseModel):
     adjustment_number: str = Field(min_length=1, max_length=60)
-    reason: Literal["OPENING_BALANCE", "COUNT_CORRECTION", "PRODUCTION_REVERSAL", "OTHER"]
+    reason: Literal["OPENING_BALANCE", "COUNT_CORRECTION", "PRODUCTION_REVERSAL", "MOVEMENT_REVERSAL", "OTHER"]
     note: str | None = Field(default=None, max_length=4000)
     lines: list[StockAdjustmentLineCreate] = Field(min_length=1, max_length=200)
 
@@ -122,3 +122,18 @@ class InventoryReconciliationRead(BaseModel):
     is_reconciled: bool
     checked_item_locations: int
     mismatches: list[InventoryReconciliationItem]
+
+
+
+class StockMovementReversalCreate(BaseModel):
+    adjustment_number: str = Field(min_length=1, max_length=60)
+    note: str | None = Field(default=None, max_length=4000)
+
+
+class StockMovementReversalRead(BaseModel):
+    adjustment_id: int
+    reversed_movement_id: int
+    reversal_movement_id: int
+    status: Literal["POSTED"]
+    quantity_delta: Decimal
+    extended_cost: Decimal
