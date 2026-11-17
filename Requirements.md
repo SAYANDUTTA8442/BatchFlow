@@ -512,13 +512,17 @@ The system shall compare planned and actual consumption for each BOM component.
 
 For a positive planned quantity:
 
-`ConsumptionVariance(\%) =
-\frac{Actual-Planned}{Planned}\times100`
+\[
+ConsumptionVariance(\%) =
+\frac{Actual-Planned}{Planned}\times100
+\]
 
 Yield variance shall be:
 
-`YieldVariance(\%) =
-\frac{ActualGoodOutput-ExpectedOutput}{ExpectedOutput}\times100`
+\[
+YieldVariance(\%) =
+\frac{ActualGoodOutput-ExpectedOutput}{ExpectedOutput}\times100
+\]
 
 A configurable tolerance shall control variance alerts.
 
