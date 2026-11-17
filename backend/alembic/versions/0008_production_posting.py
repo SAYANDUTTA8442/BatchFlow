@@ -149,7 +149,7 @@ def upgrade() -> None:
         "stock_movements", "production_run_lines", ["production_run_line_id"], ["id"], ondelete="RESTRICT",
     )
     op.create_foreign_key(
-        "fk_stock_movements_production_run_output_id_production_run_outputs",
+        "fk_stock_movements_prod_run_output",
         "stock_movements", "production_run_outputs", ["production_run_output_id"], ["id"], ondelete="RESTRICT",
     )
     op.create_unique_constraint(
@@ -256,7 +256,7 @@ def downgrade() -> None:
     op.drop_constraint("uq_stock_movements_production_run_output", "stock_movements", type_="unique")
     op.drop_constraint("uq_stock_movements_production_run_line", "stock_movements", type_="unique")
     op.drop_constraint(
-        "fk_stock_movements_production_run_output_id_production_run_outputs",
+        "fk_stock_movements_prod_run_output",
         "stock_movements", type_="foreignkey",
     )
     op.drop_constraint(

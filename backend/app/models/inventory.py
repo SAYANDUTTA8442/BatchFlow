@@ -173,7 +173,7 @@ class StockMovement(Base):
         ForeignKey("production_run_lines.id", ondelete="RESTRICT")
     )
     production_run_output_id: Mapped[int | None] = mapped_column(
-        ForeignKey("production_run_outputs.id", ondelete="RESTRICT")
+        ForeignKey("production_run_outputs.id", name="fk_stock_movements_prod_run_output", ondelete="RESTRICT")
     )
     reverses_movement_id: Mapped[int | None] = mapped_column(
         ForeignKey("stock_movements.id", ondelete="RESTRICT")
