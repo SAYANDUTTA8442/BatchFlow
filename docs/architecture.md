@@ -194,6 +194,8 @@ The persistence layer uses SQLAlchemy and PostgreSQL. It is responsible for:
 
 Repositories should not hide transaction boundaries. The application service owns commit/rollback.
 
+Unit input validation is configuration-driven: KG and L accept up to three decimal places; G, PCS, PACKET and CARTON accept whole-number input. Excess precision is rejected before conversion. Accepted values are normalized to the inventory base unit and persisted at six decimal places. Order review preserves immutable submitted quantity/price snapshots and records every review edit through append-only before/after audit events; a separate revision table is not part of the MVP.
+
 ## 5. Business module boundaries
 
 The backend is one application, organized by business capability. Modules may call one another through application-service interfaces or shared domain services; they must not create circular dependencies.
@@ -205,8 +207,8 @@ The backend is one application, organized by business capability. Modules may ca
 | Sales | Sales orders, order lines, review and approval lifecycle | Physical stock deduction |
 | Inventory | Stock movements, balance projections, reservations, stock availability | Production or sales workflow policy |
 | Procurement | Purchase records and raw-material receipt posting | Production consumption |
-| Production | Production runs, BOM snapshots, actual consumption, output, variance and run cost | Sales dispatch |
-| Billing | Invoice numbering, invoice snapshots, tax calculations and invoice documents | Physical dispatch |
+| Production | Production runs, BOM snapshots, actual consumption, output, variance, run cost and linked correction/reversal workflow | Sales dispatch |
+| Billing | Invoice numbering, immutable invoice snapshots, tax calculations, full credit-note cancellation and invoice documents | Physical dispatch |
 | Dispatch | Dispatch records and finished-goods issue | Invoice tax calculation |
 | Receivables | Customer payments, allocations and outstanding calculations | Banking integration |
 | Audit & Reporting | Audit events, read models, exports and report queries | Mutation of source transactions |
@@ -632,15 +634,11 @@ Minimum operational safeguards:
 
 ## 16. Open decisions before implementation
 
-The following details remain unresolved and must be decided before their behavior is implemented:
+The following operational policy remains unresolved and must be decided before implementation:
 
-1. **Invoice correction:** reversal/credit-note behavior for an already issued invoice; silent mutation is prohibited.
-2. **Quantity precision:** permitted input precision and rounding policy per inventory unit.
-3. **Audit retention:** required retention and access policy for the assessment prototype.
+1. **Audit retention:** required retention period and access policy for the assessment prototype.
 
-Order cancellation/reservation release, full-dispatch-only behavior, payment allocation policy, one-factory location and WAC rounding are already resolved in the transaction and database design documents.
-
-Until decided, these cases must not be presented as supported features.
+The previously open decisions for invoice cancellation through a full credit note, unit-specific input precision, production-run correction and order review history are now resolved in docs/database-schema.md §18 and docs/transaction-design.md. Order cancellation/reservation release, full-dispatch-only behavior, payment allocation policy, one-factory location, WAC rounding and bearer-token authentication are also resolved. These policies must not be silently changed in endpoint code.
 
 ## 17. Traceability to requirements
 
