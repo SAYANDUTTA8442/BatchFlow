@@ -1,4 +1,6 @@
 import uuid
+
+import pytest
 from collections.abc import Generator
 from decimal import Decimal
 
