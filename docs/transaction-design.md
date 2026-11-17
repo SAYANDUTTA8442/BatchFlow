@@ -307,15 +307,25 @@ Approval transaction:
 
 Approval is all-or-nothing. It must not reserve only some lines.
 
-### 7.4 Rejection and release
+### 7.4 Rejection, cancellation and release
 
 - A SUBMITTED order may be rejected without reservation.
-- An APPROVED order may be cancelled only before invoice issuance and dispatch; cancellation must lock the order, release all ACTIVE reservations, record the reason and actor, update the order state and write an audit event atomically.
+- An APPROVED order may be cancelled before invoice issuance; lock the order, release all ACTIVE reservations, record reason/actor, update state and write the audit event atomically.
+- An INVOICED order may be cancelled only through the full invoice-cancellation workflow in §9.5. Direct order cancellation after invoice issuance is prohibited.
 - A REJECTED order cannot be approved without a new submission/revision workflow.
-- The reconciled database schema includes CANCELLED in the sales_orders status CHECK. The cancellation transition must still be enforced by the service and integration tests.
-- Once an invoice is issued, order cancellation is not supported in the initial MVP. Invoice correction requires a separately designed credit-note/void workflow.
+- The cancellation transition and reservation release are enforced by service guards and PostgreSQL integration tests.
 
-### 7.5 Reservation invariants
+### 7.5 Unit input precision
+
+Validate the entered quantity against the selected input unit before unit conversion:
+
+- KG and L accept at most three decimal places.
+- G, PCS, PACKET and CARTON accept whole-number input.
+- Excess decimal places are rejected with a validation error; do not silently round user input.
+- Convert accepted quantities to the inventory item's canonical base unit and persist normalized values at six decimal places.
+- Quantity arithmetic after normalization uses Decimal, never binary floating point.
+
+### 7.6 Reservation invariants
 
 For each reservation:
 
@@ -497,14 +507,39 @@ For the Retailer A benchmark:
 
 Invoice issuance does not deduct physical stock.
 
-### 9.4 Invoice immutability and correction
+### 9.4 Invoice immutability
 
 - Issued invoice header/lines are immutable to ordinary application operations.
 - No hard delete is allowed.
-- The initial MVP does not implement a general credit-note engine.
-- A draft invoice may be discarded before issuance because it has no issued invoice number or legal posting effect.
-- After issuance, a correction is blocked in the MVP unless the documented cancellation/credit-note workflow has been implemented and authorized.
+- A draft invoice may be discarded before issuance because it has no issued invoice number or posting effect.
 - Do not silently edit an issued invoice or reset its number.
+
+### 9.5 Full invoice cancellation through a credit note
+
+The MVP supports one full-value credit note per invoice, only before dispatch and payment allocation. Partial credit notes, post-dispatch returns, refunds and general GST adjustment workflows are deferred.
+
+Preconditions:
+
+- Invoice status is ISSUED and no dispatch exists.
+- No payment allocation references the invoice.
+- The associated order is INVOICED and its reservation remains ACTIVE and unconsumed.
+- The actor is authorized to cancel invoices and supplies a non-empty reason.
+- No credit note already exists for the invoice.
+
+Within one transaction:
+
+1. Claim the idempotency key.
+2. Lock invoice, order, reservation rows and the credit-note series row in a deterministic order.
+3. Re-check all preconditions, including absence of dispatch and payment allocations.
+4. Allocate a credit-note number from its own financial-year series; increment the series in this transaction.
+5. Copy every original invoice line into credit_note_lines with identical quantities, prices, taxable values, GST rates, tax components and line totals. Do not recalculate tax.
+6. Insert the full-value credit-note header with totals exactly equal to the original invoice totals.
+7. Set invoice status to CANCELLED; never delete or edit its original snapshot.
+8. Release all ACTIVE order reservations, set the sales order status to CANCELLED, and record the cancellation reason.
+9. Insert INVOICE_CANCELLED and CREDIT_NOTE_ISSUED audit events plus the idempotency response.
+10. Commit.
+
+The invoice and credit-note numbers are separate sequences. A committed credit-note number is never reused. If any step fails, the credit note, invoice/order state changes and reservation release all roll back. The credit note is an assessment-MVP full reversal representation, not a complete statutory GST or sales-return engine.
 
 ## 10. Dispatch posting
 
@@ -516,7 +551,7 @@ If a future scope change adds partial dispatch, it must introduce cumulative dis
 
 ### 10.2 Preconditions
 
-- Invoice exists and is ISSUED.
+- Invoice exists and is ISSUED (a CANCELLED invoice is never dispatchable).
 - Invoice has not already been dispatched.
 - The associated order is INVOICED.
 - Dispatch quantities match the full undelivered invoice quantities.
@@ -584,7 +619,7 @@ For the benchmark, the ₹4,000 receipt is fully allocated to Retailer A's invoi
 - Payment amount is positive.
 - Customer is active.
 - Invoice belongs to the same customer.
-- Invoice is issued and not voided under any future correction process.
+- Invoice is ISSUED and not CANCELLED.
 - Allocation amount is positive.
 - Total new allocation plus existing allocations does not exceed invoice outstanding.
 - Sum of allocations for a payment does not exceed payment amount.
@@ -645,16 +680,38 @@ A reversal must:
 - Update balance and valuation projections in the same transaction.
 - Create an audit event.
 
-### 13.2 MVP limits
+### 13.2 Production-run correction workflow
 
-The first MVP must support stock adjustment and technical reversal primitives only where their behavior is fully tested. It must not expose a generic “undo” button for every posted business document.
+The MVP permits one correction per posted production run. Correction is performed through a linked PRODUCTION_REVERSAL stock-adjustment document; the original production run, cost lines, output/consumption snapshots and stock movements remain immutable. The original run transitions to REVERSED, and an optional corrected replacement is a new production run posted through the ordinary workflow.
 
-The following require separately designed rules before implementation:
+Preconditions:
 
-- Reversing a production run after its output has been dispatched.
-- Reversing an invoice with an associated dispatch or payment.
-- Credit notes and GST correction documents.
-- Reversing a payment allocation after later allocations have occurred.
+- The original run is POSTED and has no existing correction record.
+- None of its finished-good output has been reserved or dispatched.
+- The current unreserved on-hand quantity is sufficient to remove the original output.
+- Reversing every material/packaging issue and finished-good output movement will not create negative quantity or inventory value.
+- The actor is authorized and provides a reason.
+
+Because the MVP does not track finished goods by batch, any reservation or dispatch of the same finished-good item after the original run's posting is a conservative blocker, even if unrelated stock may have existed. This avoids pretending to know which physical units were consumed.
+
+Atomic correction sequence:
+
+1. Claim the idempotency key and lock the production run.
+2. Verify the preconditions and lock every affected item/location balance and valuation row in deterministic item order.
+3. Create one stock-adjustment header with reason PRODUCTION_REVERSAL.
+4. For every original production issue/output movement, create one adjustment line and one REVERSAL movement linked through reverses_movement_id. Use the exact opposite quantity and the original movement's exact extended_cost; do not recalculate historical cost using current WAC.
+5. Update inventory balances and valuations under the ADR-009 rules. Reject if any resulting quantity or value would be negative.
+6. Create the production_run_corrections record linking original run and reversal adjustment; set original run status to REVERSED.
+7. Write PRODUCTION_RUN_REVERSED and STOCK_MOVEMENT_REVERSED audit events and the idempotency response.
+8. Commit.
+
+A replacement run may be created afterward and linked to the correction record. It is a new source document with new consumption/output snapshots and a new posting transaction; it does not mutate the original run. A correction record cannot be repeated for the same original run.
+
+### 13.3 Other MVP limits
+
+- Invoice cancellation is supported only by the full credit-note workflow in §9.5, before dispatch and payment allocation.
+- Reversing a dispatch, cancelling after dispatch, refunding payments, or reversing payment allocations is not supported.
+- Generic undo of arbitrary posted documents is not supported.
 
 If a correction case is not implemented, reject the action and preserve the original records. Manual database edits are not an acceptable operational workaround.
 
@@ -677,10 +734,14 @@ Minimum event examples:
 - SALES_ORDER_SUBMITTED
 - SALES_ORDER_APPROVED
 - SALES_ORDER_REJECTED
+- SALES_ORDER_LINES_REVISED
 - SALES_ORDER_CANCELLED
 - PURCHASE_RECEIPT_POSTED
 - PRODUCTION_RUN_POSTED
+- PRODUCTION_RUN_REVERSED
 - INVOICE_ISSUED
+- INVOICE_CANCELLED
+- CREDIT_NOTE_ISSUED
 - DISPATCH_POSTED
 - PAYMENT_RECORDED
 - STOCK_ADJUSTMENT_POSTED
@@ -741,8 +802,10 @@ For each order line:
 
 - Invoice header totals equal the sum of invoice line totals.
 - Tax component totals reconcile with line tax values.
+- A credit note exactly reverses every line and tax component of its original invoice; its header totals equal the original invoice totals.
+- A CANCELLED invoice has exactly one issued full credit note and has no dispatch or payment allocations.
 - Payment allocations do not exceed payment amount.
-- Invoice outstanding equals invoice grand total less valid allocations under the current MVP policy.
+- Invoice outstanding equals invoice grand total less valid allocations; cancelled invoices are excluded from collectible outstanding.
 
 ### 16.5 Production reconciliation
 
@@ -773,6 +836,10 @@ These are mandatory integration tests against PostgreSQL, not mocks alone.
 | TX-013 | Audit insertion fails during a critical posting | Business posting rolls back |
 | TX-014 | Reversal submitted twice | At most one effective reversal |
 | TX-015 | Reconciliation after benchmark | Ledger, balance, valuation, reservation and receivable checks pass |
+| TX-016 | Quantity entered with excess precision for selected unit | Request rejected before conversion or writes; valid KG/L precision up to 3 places is accepted |
+| TX-017 | Full invoice cancellation before dispatch/payment | One exact full credit note; invoice/order CANCELLED; reservation released; numbers not reused |
+| TX-018 | Production correction with downstream reservation/dispatch or insufficient stock/value | Correction rejected with no writes; eligible correction reverses all movements exactly once |
+| TX-019 | Admin edits order quantity/price during review | Submitted snapshots remain unchanged; each edit has complete before/after audit data |
 
 Tests TX-001, TX-002, TX-003, TX-005, TX-008, TX-009, TX-010 and TX-012 are release-blocking.
 
@@ -784,7 +851,11 @@ The following decisions are reflected in the reconciled database schema and reso
 |---|---|---|
 | Isolation | READ COMMITTED plus explicit row locks/rechecks | Broad SERIALIZABLE use |
 | Reservation | Reserve full approved order quantities on approval | Partial approval and complex allocation |
-| Rejection/cancellation | Reject submitted order; release reservations on pre-invoice cancellation | Cancellation after invoice |
+| Rejection/cancellation | Reject submitted order; release reservations on pre-invoice cancellation; post-invoice cancellation only through full credit note before dispatch/payment | Post-dispatch cancellation and refunds |
+| Quantity precision | KG/L up to 3 decimal places; G/PCS/PACKET/CARTON whole numbers; reject excess precision | Silent input rounding and arbitrary per-item precision |
+| Invoice correction | One full credit note per invoice, only before dispatch/payment; cancel invoice and release reservation atomically | Partial credit notes, returns, refunds and general GST adjustments |
+| Production correction | One linked reversal adjustment per posted run; exact original movement values; block if output reserved/dispatched or stock/value would go negative; optional replacement as a new run | Batch-level attribution, corrections after downstream fulfilment |
+| Order review history | Immutable submitted values plus before/after audit events for every edit | Separate order-revision table |
 | Dispatch | One full dispatch per invoice | Partial/multiple dispatches |
 | Invoice | One immutable issued invoice per order | General credit-note engine |
 | Payment | Allocated payments only; no over-allocation | Unallocated receipts, refunds and allocation reversal |
@@ -810,7 +881,7 @@ The corresponding changes have been applied to docs/database-schema.md in commit
 8. Posting timestamps and status/timestamp consistency requirements.
 9. Indexes for stock-balance locks, active reservation queries and payment allocation lookups.
 
-Before migrations, review the remaining decisions in database-schema.md §18, especially per-unit input precision, invoice correction and production correction. Bearer-token authentication and WAC rounding are resolved and documented in database-schema.md, architecture.md and the ADRs. The two design documents must be changed together if any resolved MVP policy changes. ORM and migration work may begin after that focused review; do not silently reopen the resolved transaction policies in endpoint code.
+The four previously open schema decisions—unit input precision, invoice cancellation/credit notes, production-run correction and order review history—are now resolved and recorded in database-schema.md §18 and this document. Bearer-token authentication and WAC rounding remain accepted decisions documented in the ADRs. The schema and transaction design must be changed together if any policy changes. ORM and migration work may now begin; do not silently reopen these resolved policies in endpoint code.
 
 ## 20. Implementation sequence
 
