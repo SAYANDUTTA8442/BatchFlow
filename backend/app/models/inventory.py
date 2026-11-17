@@ -236,13 +236,19 @@ class PurchaseReceipt(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     receipt_number: Mapped[str] = mapped_column(String(60), nullable=False)
-    supplier_id: Mapped[int] = mapped_column(ForeignKey("suppliers.id", ondelete="RESTRICT"), nullable=False)
+    supplier_id: Mapped[int] = mapped_column(
+        ForeignKey("suppliers.id", name="fk_purchase_receipts_supplier", ondelete="RESTRICT"), nullable=False
+    )
     supplier_invoice_number: Mapped[str | None] = mapped_column(String(80))
     received_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False)
     note: Mapped[str | None] = mapped_column(Text)
     status: Mapped[str] = mapped_column(String(20), nullable=False, server_default=text("'DRAFT'"))
-    created_by_user_id: Mapped[int] = mapped_column(ForeignKey("users.id"), nullable=False)
-    posted_by_user_id: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
+    created_by_user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.id", name="fk_purchase_receipts_created_by", ondelete="RESTRICT"), nullable=False
+    )
+    posted_by_user_id: Mapped[int | None] = mapped_column(
+        ForeignKey("users.id", name="fk_purchase_receipts_posted_by", ondelete="RESTRICT")
+    )
     posted_at: Mapped[object | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[object] = mapped_column(DateTime(timezone=True), nullable=False, server_default=func.now())
 
@@ -263,13 +269,13 @@ class PurchaseReceiptLine(Base):
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     purchase_receipt_id: Mapped[int] = mapped_column(
-        ForeignKey("purchase_receipts.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("purchase_receipts.id", name="fk_purchase_receipt_lines_receipt", ondelete="RESTRICT"), nullable=False
     )
     inventory_item_id: Mapped[int] = mapped_column(
-        ForeignKey("inventory_items.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("inventory_items.id", name="fk_purchase_receipt_lines_item", ondelete="RESTRICT"), nullable=False
     )
     inventory_location_id: Mapped[int] = mapped_column(
-        ForeignKey("inventory_locations.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("inventory_locations.id", name="fk_purchase_receipt_lines_location", ondelete="RESTRICT"), nullable=False
     )
     quantity_received: Mapped[object] = mapped_column(Numeric(18, 6), nullable=False)
     unit_cost: Mapped[object] = mapped_column(Numeric(18, 6), nullable=False)
