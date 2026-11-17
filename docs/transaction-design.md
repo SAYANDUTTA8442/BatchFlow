@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related documents:** [Requirements.md](../Requirements.md) · [System Architecture](./architecture.md) · [Database Schema](./database-schema.md)
 
-> This document defines intended application/database behavior. It is not evidence that transaction services, migrations, locks, or tests have been implemented. The rules below must be implemented and verified against PostgreSQL integration tests.
+> This document defines the full intended application/database behavior. The first inventory slice is implemented: stock-adjustment creation and posting use PostgreSQL row locks, atomic ledger/balance/valuation updates, the ADR-009 moving-WAC policy, audit events and idempotency. Purchase-receipt posting, movement reversals, reservations, production, invoice, dispatch and payment transaction services remain design-only until implemented and verified against PostgreSQL integration tests.
 
 ---
 

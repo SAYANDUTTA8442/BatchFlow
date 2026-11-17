@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related documents:** [Requirements.md](../Requirements.md) · [architecture.md](./architecture.md)
 
-> This is a design specification, not an implemented PostgreSQL schema. No migrations or application models are implied to exist yet. Types and constraints below are proposed PostgreSQL definitions and must be validated in migrations and integration tests.
+> This document remains the full logical/relational design specification; it is not a claim that every table below is implemented. Migration `0004_inventory_ledger` and matching SQLAlchemy models implement stock adjustments, adjustment lines, the adjustment-sourced stock-movement ledger, on-hand and moving-WAC projections, audit events and idempotency records. The current posting API supports the stock-adjustment/opening-balance source only. Purchase receipts, production, reservations, invoices, dispatch, payments and their additional movement-source foreign keys remain design-only and must be implemented and verified in later migrations.
 
 ---
 

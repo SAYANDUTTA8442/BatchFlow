@@ -4,7 +4,7 @@
 
 BatchFlow is a lightweight manufacturing operations and audit-support system under active development for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
-> **Project status: IAM and master-data foundation implemented; inventory posting and business workflows pending.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds and CI. Stock ledger posting, production, sales, billing, dispatch and frontend workflows remain unimplemented.
+> **Project status: IAM, master data and the initial inventory ledger are implemented.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds, stock-adjustment posting, append-only stock movements, on-hand and moving-WAC projections, audit events, idempotency and CI. Purchase receipts, production, sales, billing, dispatch, collections and frontend workflows remain unimplemented.
 
 ---
 
@@ -219,7 +219,7 @@ Implementation will proceed in dependency order:
 |---|---|---|
 | 1 | Requirements and data model | Domain model and transaction rules reviewed |
 | 2 | Backend foundation and IAM | Implemented: FastAPI, PostgreSQL/Alembic, user/role persistence, Argon2, bearer JWT, rotating refresh sessions and integration tests |
-| 3 | Master data and inventory | Master-data models, migration, reference seeds and role-protected APIs implemented; stock ledger and opening-stock posting remain pending |
+| 3 | Master data and inventory foundation | Master-data models, migration, reference seeds and role-protected APIs implemented; stock adjustments, opening-stock posting, append-only movements, balance/valuation projections, audit and idempotent posting implemented. Purchase receipts and downstream stock workflows remain pending |
 | 4 | Production engine | BOM, production posting, yield and consumption variance tests |
 | 5 | Sales workflow | Order submission, admin review and stock checks |
 | 6 | Billing and dispatch | GST invoice PDF and safe stock deduction |
@@ -235,17 +235,17 @@ Implementation will proceed in dependency order:
 |---|---|
 | Product requirements | Documented in [Requirements.md](./Requirements.md) |
 | Architecture design | Documented in [docs/architecture.md](./docs/architecture.md) |
-| Database schema design | Documented; roles/units, IAM and master-data migrations implemented. Inventory ledger and business-document migrations remain pending |
-| Transaction design | Documented in [docs/transaction-design.md](./docs/transaction-design.md); transaction services not implemented |
+| Database schema design | Documented; roles/units, IAM, master data, stock adjustments, stock movements, balance/valuation projections, audit and idempotency migrations implemented. Remaining business-document migrations are pending |
+| Transaction design | Documented in [docs/transaction-design.md](./docs/transaction-design.md); stock-adjustment posting with row locks, atomic projections, WAC, audit and idempotency implemented; other business transaction services pending |
 | Backend foundation | Implemented |
-| Backend API | Health, authentication and master-data endpoints implemented; stock/business posting routes pending |
+| Backend API | Health, authentication, master-data, stock-adjustment posting, inventory balances and stock-movement read endpoints implemented |
 | Authentication and RBAC | Login, refresh, logout, current-user endpoint and role dependency implemented; master-data writes are admin/owner-only and salesman customer lists are assignment-scoped |
 | Master-data API | Inventory items, products, customers, salesman assignments, suppliers, unit conversions and locations implemented |
 | Frontend application | Not implemented |
-| Production and inventory engine | Not implemented |
+| Production and inventory engine | Initial stock-adjustment ledger and moving-WAC foundation implemented; purchase receipts, production issues/outputs, reversals, reservations and dispatch integration pending |
 | Sales, invoice and dispatch workflow | Not implemented |
 | Reports and exports | Not implemented |
-| Backend tests and CI | 20 tests passing in the latest verified run; PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |
+| Backend tests and CI | 25 tests passing in the latest verified run; Ruff, PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |
 | Local PostgreSQL environment | Docker Compose service implemented; application deployment/demo not implemented |
 
 This table will be updated as verified work is committed.
