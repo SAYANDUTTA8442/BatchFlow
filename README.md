@@ -4,7 +4,7 @@
 
 BatchFlow is a planned, lightweight manufacturing operations and audit-support system for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
-> **Project status: Backend foundation started.** Requirements and architecture are documented. A FastAPI scaffold, PostgreSQL connection layer, initial Alembic migration for shared reference tables, reference-data seeder, health endpoints and backend CI are implemented. Business workflows, authentication and frontend screens remain unimplemented.
+> **Project status: IAM implemented; business workflows pending.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, a user-provisioning CLI, health endpoints and CI. Inventory, production, sales, billing, dispatch and frontend workflows remain unimplemented.
 
 ---
 
@@ -237,10 +237,10 @@ Implementation will proceed in dependency order:
 | Architecture design | Documented in [docs/architecture.md](./docs/architecture.md) |
 | Database schema design | Documented; initial roles/units migration implemented. Domain schema migrations remain pending |
 | Transaction design | Documented in [docs/transaction-design.md](./docs/transaction-design.md); transaction services not implemented |
-| Backend foundation | Configuration, SQLAlchemy session, reference models, seed script and health endpoints implemented |
-| Backend API | Health endpoints implemented; business API routes not implemented |
+| Backend foundation | Implemented |
+| Backend API | Health and authentication endpoints implemented; business routes pending |
+| Authentication and RBAC | Login, refresh, logout, current-user endpoint and role dependency implemented; full business authorization policies pending |
 | Frontend application | Not implemented |
-| Authentication and RBAC | Not implemented |
 | Production and inventory engine | Not implemented |
 | Sales, invoice and dispatch workflow | Not implemented |
 | Reports and exports | Not implemented |
