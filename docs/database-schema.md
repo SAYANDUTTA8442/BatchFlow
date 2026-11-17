@@ -407,7 +407,7 @@ Represents stock committed to an approved order without reducing physical on-han
 
 id BIGINT identity primary key; sales_order_id BIGINT FK → sales_orders.id NOT NULL; sales_order_line_id BIGINT FK → sales_order_lines.id NOT NULL; inventory_item_id BIGINT FK → inventory_items.id NOT NULL; quantity_reserved NUMERIC(18,6) NOT NULL CHECK (> 0); quantity_consumed NUMERIC(18,6) NOT NULL DEFAULT 0 CHECK (>= 0); status VARCHAR(20) CHECK IN (ACTIVE, CONSUMED, RELEASED); created_at TIMESTAMPTZ NOT NULL DEFAULT now(); released_at TIMESTAMPTZ NULL.
 
-Consumed quantity cannot exceed reserved quantity. Add UNIQUE(sales_order_line_id) for the MVP: each approved order line has one reservation row. The reservation's sales_order_id and inventory_item_id must match its referenced order line/product inventory item; enforce this in the service or with composite foreign keys. Active reservations reduce available-to-promise, not on-hand. On cancellation before invoice issuance, release every ACTIVE reservation in the same transaction and set released_at; cancellation after invoice issuance is rejected in the MVP. Dispatch consumes the linked reservation atomically with the physical stock issue. Partial dispatch is not supported.
+Consumed quantity cannot exceed reserved quantity. Add UNIQUE(sales_order_line_id) for the MVP: each approved order line has one reservation row. The reservation's sales_order_id and inventory_item_id must match its referenced order line/product inventory item; enforce this in the service or with composite foreign keys. Active reservations reduce available-to-promise, not on-hand. On cancellation before invoice issuance, release every ACTIVE reservation in the same transaction and set released_at. After invoice issuance, cancellation is permitted only through the full credit-note workflow in §9.5, which also releases the ACTIVE reservation and changes the order to CANCELLED; it is rejected if dispatch or payment allocation already exists. Dispatch consumes the linked reservation atomically with the physical stock issue. Partial dispatch is not supported.
 
 ## 9. Billing and invoice tables
 
@@ -490,6 +490,7 @@ One full-value credit note may cancel an invoice in the MVP.
 | taxable_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0) |
 | cgst_total / sgst_total / igst_total | NUMERIC(18,2) | NOT NULL DEFAULT 0 CHECK (>= 0) |
 | grand_total | NUMERIC(18,2) | NOT NULL CHECK (>= 0) |
+| tax_treatment | VARCHAR(10) | NOT NULL CHECK IN (INTRA_STATE, INTER_STATE); copied from original invoice |
 | status | VARCHAR(20) | NOT NULL CHECK IN (ISSUED) |
 | issued_at | TIMESTAMPTZ | NOT NULL |
 | issued_by_user_id | BIGINT | FK → users.id, NOT NULL |
@@ -542,7 +543,7 @@ id BIGINT identity primary key; payment_id BIGINT FK → payments.id NOT NULL; i
 
 A payment may be allocated across invoices; an invoice may receive multiple payments. Allocations cannot exceed payment amount under the initial policy. Validate that payment customer matches invoice customer in the application service.
 
-Outstanding is derived as invoice grand total minus valid allocations, subject to future credit-note/cancellation rules. Do not store an independently editable outstanding amount. Benchmark: ₹7,875 − ₹4,000 = ₹3,875.
+Outstanding is derived as invoice grand total minus valid allocations. CANCELLED invoices with a full credit note are excluded from collectible outstanding; payment allocations against a cancelled invoice are prohibited. Do not store an independently editable outstanding amount. Benchmark: ₹7,875 − ₹4,000 = ₹3,875.
 
 ## 12. Inventory ledger and valuation tables
 
@@ -813,7 +814,7 @@ Do not add these without a concrete requirement:
 
 These may be future extensions. Keep the initial schema small enough to understand and test.
 
-## 18. Remaining decisions before migrations
+## 18. Resolved decisions before migrations
 
 The four schema decisions previously listed as open are now resolved for the MVP:
 
