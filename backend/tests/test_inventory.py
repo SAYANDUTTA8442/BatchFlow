@@ -322,7 +322,10 @@ def test_purchase_receipt_post_is_idempotent(
     assert first.json() == second.json()
     count = len(
         db.scalars(
-            select(StockMovement).where(StockMovement.purchase_receipt_line_id.is_not(None))
+            select(StockMovement).where(
+                StockMovement.inventory_item_id == item_id,
+                StockMovement.purchase_receipt_line_id.is_not(None),
+            )
         ).all()
     )
     assert count == 1
