@@ -1,8 +1,11 @@
+from decimal import Decimal
+
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.orm import Session
 
 from app.db.session import SessionLocal
-from app.models import Role, Unit
+from app.models import InventoryLocation, Role, Unit, UnitConversion
 
 
 ROLES = [
@@ -58,6 +61,10 @@ UNITS = [
     },
 ]
 
+LOCATIONS = [
+    {"code": "FACTORY-01", "name": "Main Factory"},
+]
+
 
 def seed_reference_data(session: Session) -> None:
     for role in ROLES:
@@ -66,6 +73,33 @@ def seed_reference_data(session: Session) -> None:
 
     for unit in UNITS:
         statement = insert(Unit).values(**unit).on_conflict_do_nothing(index_elements=[Unit.code])
+        session.execute(statement)
+
+    for location in LOCATIONS:
+        statement = (
+            insert(InventoryLocation)
+            .values(**location)
+            .on_conflict_do_nothing(index_elements=[InventoryLocation.code])
+        )
+        session.execute(statement)
+
+    kg_id = session.scalar(select(Unit.id).where(Unit.code == "KG"))
+    gram_id = session.scalar(select(Unit.id).where(Unit.code == "G"))
+    if kg_id is None or gram_id is None:
+        raise RuntimeError("KG and G units must exist before seeding conversions")
+
+    conversions = [
+        {"from_unit_id": kg_id, "to_unit_id": gram_id, "factor": Decimal("1000")},
+        {"from_unit_id": gram_id, "to_unit_id": kg_id, "factor": Decimal("0.001")},
+    ]
+    for conversion in conversions:
+        statement = (
+            insert(UnitConversion)
+            .values(**conversion)
+            .on_conflict_do_nothing(
+                index_elements=[UnitConversion.from_unit_id, UnitConversion.to_unit_id]
+            )
+        )
         session.execute(statement)
 
 
