@@ -35,6 +35,20 @@ def db(auth_engine) -> Generator[Session, None, None]:
 
 
 @pytest.fixture
+def client(auth_engine):
+    factory = sessionmaker(bind=auth_engine, class_=Session, expire_on_commit=False)
+
+    def override_db():
+        with factory() as request_session:
+            yield request_session
+
+    app.dependency_overrides[get_db] = override_db
+    with TestClient(app) as test_client:
+        yield test_client
+    app.dependency_overrides.clear()
+
+
+@pytest.fixture
 def user(db: Session) -> User:
     return create_user(
         db,
