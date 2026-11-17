@@ -67,7 +67,7 @@ class StockAdjustmentLine(Base):
         ForeignKey("inventory_items.id", ondelete="RESTRICT"), nullable=False
     )
     inventory_location_id: Mapped[int] = mapped_column(
-        ForeignKey("inventory_locations.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("inventory_locations.id", name="fk_stock_adj_lines_location", ondelete="RESTRICT"), nullable=False
     )
     quantity_delta: Mapped[object] = mapped_column(Numeric(18, 6), nullable=False)
     unit_cost: Mapped[object | None] = mapped_column(Numeric(18, 6))
@@ -111,7 +111,7 @@ class InventoryValuation(Base):
         ForeignKey("inventory_items.id", ondelete="RESTRICT"), primary_key=True
     )
     inventory_location_id: Mapped[int] = mapped_column(
-        ForeignKey("inventory_locations.id", ondelete="RESTRICT"), primary_key=True
+        ForeignKey("inventory_locations.id", name="fk_inv_valuations_location", ondelete="RESTRICT"), primary_key=True
     )
     valued_qty: Mapped[object] = mapped_column(
         Numeric(18, 6), nullable=False, server_default=text("0")
@@ -154,7 +154,7 @@ class StockMovement(Base):
     unit_cost: Mapped[object | None] = mapped_column(Numeric(18, 6))
     extended_cost: Mapped[object | None] = mapped_column(Numeric(18, 2))
     stock_adjustment_line_id: Mapped[int] = mapped_column(
-        ForeignKey("stock_adjustment_lines.id", ondelete="RESTRICT"), nullable=False
+        ForeignKey("stock_adjustment_lines.id", name="fk_stock_movements_adjustment_line", ondelete="RESTRICT"), nullable=False
     )
     reverses_movement_id: Mapped[int | None] = mapped_column(
         ForeignKey("stock_movements.id", ondelete="RESTRICT")
