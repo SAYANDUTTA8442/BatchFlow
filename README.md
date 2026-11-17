@@ -247,7 +247,7 @@ Implementation will proceed in dependency order:
 | Production and inventory engine | Stock-adjustment and supplier purchase-receipt ledger posting, moving-WAC valuation, projection reconciliation, exact-cost reversals and versioned BOM management implemented; production-run issues/outputs, reservations and dispatch integration pending |
 | Sales, invoice and dispatch workflow | Sales-order submission and salesman-scoped reads implemented; review/approval, reservation, invoice and dispatch pending |
 | Reports and exports | Not implemented |
-| Backend tests and CI | 34 tests passing in the latest verified run; Ruff, PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |
+| Backend tests and CI | 46 tests passing in the latest verified run; Ruff, PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |
 | Local PostgreSQL environment | Docker Compose service implemented; application deployment/demo not implemented |
 
 This table will be updated as verified work is committed.
