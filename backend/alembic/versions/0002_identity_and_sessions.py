@@ -60,7 +60,7 @@ def upgrade() -> None:
         "auth_refresh_tokens",
         sa.Column("id", sa.Uuid(), nullable=False),
         sa.Column("session_id", sa.Uuid(), nullable=False),
-        sa.Column("token_hash", sa.String(64), nullable=False),
+        sa.Column("token_hash", sa.CHAR(64), nullable=False),
         sa.Column("issued_at", sa.DateTime(timezone=True), server_default=sa.func.now(), nullable=False),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=False),
         sa.Column("consumed_at", sa.DateTime(timezone=True)),

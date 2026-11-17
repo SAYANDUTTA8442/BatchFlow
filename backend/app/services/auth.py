@@ -117,6 +117,8 @@ def rotate_refresh_token(db: Session, raw_token: str) -> tuple[TokenResponse, st
 
 
 def revoke_session(db: Session, session_id: uuid.UUID, user_id: int) -> None:
+    # Authentication dependencies may have opened a read transaction.
+    db.rollback()
     now = datetime.now(UTC)
     with db.begin():
         session = db.scalar(
@@ -131,6 +133,8 @@ def revoke_session(db: Session, session_id: uuid.UUID, user_id: int) -> None:
 
 def create_user(db: Session, *, full_name: str, email: str, password: str, role_codes: list[str]) -> User:
     normalized_email = email.strip().lower()
+    if not role_codes:
+        raise ValueError("At least one role is required")
     with db.begin():
         if db.scalar(select(User.id).where(User.email == normalized_email)) is not None:
             raise ValueError("A user with this email already exists")
