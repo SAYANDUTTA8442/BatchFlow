@@ -239,10 +239,11 @@ def test_inactive_user_cannot_login_or_refresh(
     user: User,
 ) -> None:
     origin = {"Origin": "http://localhost:5173"}
+    email = user.email
     login = client.post(
         "/api/auth/login",
         headers=origin,
-        json={"email": user.email, "password": "A-Strong-Test-Password-123!"},
+        json={"email": email, "password": "A-Strong-Test-Password-123!"},
     )
     assert login.status_code == 200
     access = login.json()["access_token"]
@@ -262,7 +263,7 @@ def test_inactive_user_cannot_login_or_refresh(
     login_again = client.post(
         "/api/auth/login",
         headers=origin,
-        json={"email": user.email, "password": "A-Strong-Test-Password-123!"},
+        json={"email": email, "password": "A-Strong-Test-Password-123!"},
     )
     assert login_again.status_code == 403
 
