@@ -17,7 +17,11 @@ from app.models import (
     InventoryBalance,
     InventoryItem,
     InventoryLocation,
+    InventoryValuation,
+    PurchaseReceipt,
+    PurchaseReceiptLine,
     StockMovement,
+    Supplier,
     Unit,
     User,
 )
@@ -221,3 +225,153 @@ def test_adjustment_post_requires_admin_or_owner(
     token = _token(client, salesman)
     response = client.get("/api/inventory/balances", headers={"Authorization": f"Bearer {token}"})
     assert response.status_code == 403
+
+
+
+def _supplier(db: Session) -> Supplier:
+    supplier = Supplier(
+        supplier_code=f"SUP-{uuid.uuid4().hex[:8]}",
+        name="Benchmark Flour Supplier",
+        state_code="33",
+        is_active=True,
+    )
+    db.add(supplier)
+    db.commit()
+    return supplier
+
+
+def _purchase_receipt(
+    client: TestClient,
+    token: str,
+    supplier_id: int,
+    item_id: int,
+    location_id: int,
+    receipt_number: str,
+    quantity: str,
+    unit_cost: str,
+    supplier_invoice_number: str | None = None,
+):
+    return client.post(
+        "/api/inventory/purchase-receipts",
+        headers={"Authorization": f"Bearer {token}"},
+        json={
+            "receipt_number": receipt_number,
+            "supplier_id": supplier_id,
+            "supplier_invoice_number": supplier_invoice_number,
+            "received_at": "2026-11-17T10:00:00+05:30",
+            "lines": [{
+                "inventory_item_id": item_id,
+                "inventory_location_id": location_id,
+                "quantity_received": quantity,
+                "unit_cost": unit_cost,
+            }],
+        },
+    )
+
+
+def test_purchase_receipt_post_updates_wac_and_reconciles(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    supplier = _supplier(db)
+
+    opening = _adjust(client, token, item_id, location_id, "OPEN-PR-001", "OPENING_BALANCE", "100", "42", "unused")
+    assert opening.status_code == 201
+    assert _post(client, token, opening.json()["id"], "opening-pr-001").status_code == 200
+
+    receipt = _purchase_receipt(
+        client, token, supplier.id, item_id, location_id, "PR-001", "60", "45", "SUP-INV-001"
+    )
+    assert receipt.status_code == 201, receipt.text
+    receipt_id = receipt.json()["id"]
+    posted = client.post(
+        f"/api/inventory/purchase-receipts/{receipt_id}/post",
+        headers={"Authorization": f"Bearer {token}", "Idempotency-Key": "purchase-post-001"},
+    )
+    assert posted.status_code == 200, posted.text
+    assert Decimal(posted.json()["total_receipt_cost"]) == Decimal("2700.00")
+    assert posted.json()["movement_count"] == 1
+
+    balance = client.get("/api/inventory/balances", headers={"Authorization": f"Bearer {token}"})
+    row = next(value for value in balance.json() if value["inventory_item_id"] == item_id)
+    assert Decimal(row["on_hand_qty"]) == Decimal("160.000000")
+    assert Decimal(row["inventory_value"]) == Decimal("6900.00")
+    assert Decimal(row["average_unit_cost"]) == Decimal("43.125000")
+
+    reconciliation = client.get(
+        "/api/inventory/reconciliation", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert reconciliation.status_code == 200
+    assert reconciliation.json()["is_reconciled"] is True
+
+
+def test_purchase_receipt_post_is_idempotent(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    supplier = _supplier(db)
+    receipt = _purchase_receipt(
+        client, token, supplier.id, item_id, location_id, "PR-RETRY", "5", "10"
+    )
+    assert receipt.status_code == 201
+    receipt_id = receipt.json()["id"]
+    headers = {"Authorization": f"Bearer {token}", "Idempotency-Key": "receipt-retry"}
+    first = client.post(f"/api/inventory/purchase-receipts/{receipt_id}/post", headers=headers)
+    second = client.post(f"/api/inventory/purchase-receipts/{receipt_id}/post", headers=headers)
+    assert first.status_code == second.status_code == 200
+    assert first.json() == second.json()
+    count = db.scalar(
+        select(StockMovement.id).where(StockMovement.purchase_receipt_line_id.is_not(None))
+    )
+    assert count is not None
+
+
+def test_purchase_receipt_rejects_inactive_supplier(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    supplier = _supplier(db)
+    supplier.is_active = False
+    db.commit()
+    response = _purchase_receipt(
+        client, token, supplier.id, item_id, location_id, "PR-INACTIVE", "1", "10"
+    )
+    assert response.status_code == 422
+
+
+def test_purchase_receipt_duplicate_supplier_invoice_is_rejected(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    supplier = _supplier(db)
+    first = _purchase_receipt(
+        client, token, supplier.id, item_id, location_id, "PR-DUP-1", "1", "10", "INV-DUP"
+    )
+    second = _purchase_receipt(
+        client, token, supplier.id, item_id, location_id, "PR-DUP-2", "1", "10", "INV-DUP"
+    )
+    assert first.status_code == 201
+    assert second.status_code == 409
+
+
+def test_reconciliation_detects_projection_drift(
+    client: TestClient, db: Session, admin: User
+) -> None:
+    token = _token(client, admin)
+    item_id, location_id = _item_and_location(db)
+    opening = _adjust(client, token, item_id, location_id, "OPEN-DRIFT", "OPENING_BALANCE", "2", "10", "unused")
+    assert opening.status_code == 201
+    assert _post(client, token, opening.json()["id"], "opening-drift").status_code == 200
+    valuation = db.get(InventoryValuation, (item_id, location_id))
+    valuation.inventory_value = Decimal("999.00")
+    db.commit()
+    response = client.get(
+        "/api/inventory/reconciliation", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    assert response.json()["is_reconciled"] is False
+    assert any(x["inventory_item_id"] == item_id for x in response.json()["mismatches"])

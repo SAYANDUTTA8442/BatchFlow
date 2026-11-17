@@ -7,6 +7,10 @@ from app.api.dependencies import Principal, get_current_principal, require_roles
 from app.db.session import get_db
 from app.schemas.inventory import (
     InventoryBalanceRead,
+    InventoryReconciliationRead,
+    PurchaseReceiptCreate,
+    PurchaseReceiptPostRead,
+    PurchaseReceiptRead,
     StockAdjustmentCreate,
     StockAdjustmentPostRead,
     StockAdjustmentRead,
@@ -17,6 +21,9 @@ from app.services.inventory import (
     list_inventory_balances,
     list_stock_movements,
     post_stock_adjustment,
+    create_purchase_receipt,
+    post_purchase_receipt,
+    reconcile_inventory,
 )
 
 
@@ -54,3 +61,26 @@ def get_balances(db: Db, principal: InventoryReadDep):
 @router.get("/movements", response_model=list[StockMovementRead])
 def get_movements(db: Db, principal: InventoryReadDep):
     return list_stock_movements(db)
+
+
+
+@router.post("/purchase-receipts", response_model=PurchaseReceiptRead, status_code=201)
+def create_receipt(payload: PurchaseReceiptCreate, db: Db, principal: InventoryWriteDep):
+    return create_purchase_receipt(db, payload, principal.user.id)
+
+
+@router.post("/purchase-receipts/{receipt_id}/post", response_model=PurchaseReceiptPostRead)
+def post_receipt(
+    receipt_id: int,
+    db: Db,
+    principal: InventoryWriteDep,
+    idempotency_key: Annotated[str, Header(alias="Idempotency-Key", min_length=1, max_length=160)],
+):
+    if not idempotency_key.strip():
+        raise HTTPException(status_code=400, detail="Idempotency-Key cannot be blank")
+    return post_purchase_receipt(db, receipt_id, principal.user.id, idempotency_key)
+
+
+@router.get("/reconciliation", response_model=InventoryReconciliationRead)
+def get_reconciliation(db: Db, principal: InventoryReadDep):
+    return reconcile_inventory(db)
