@@ -57,7 +57,7 @@ def upgrade() -> None:
         sa.CheckConstraint("unit_cost IS NULL OR unit_cost >= 0", name="ck_stock_adjustment_lines_unit_cost_nonnegative"),
         sa.ForeignKeyConstraint(["stock_adjustment_id"], ["stock_adjustments.id"], name="fk_stock_adjustment_lines_stock_adjustment_id_stock_adjustments", ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["inventory_item_id"], ["inventory_items.id"], name="fk_stock_adjustment_lines_inventory_item_id_inventory_items", ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["inventory_location_id"], ["inventory_locations.id"], name="fk_stock_adjustment_lines_inventory_location_id_inventory_locations", ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["inventory_location_id"], ["inventory_locations.id"], name="fk_stock_adj_lines_location", ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("id", name="pk_stock_adjustment_lines"),
         sa.UniqueConstraint("stock_adjustment_id", "inventory_item_id", "inventory_location_id", name="uq_stock_adjustment_lines_item_location"),
     )
@@ -89,7 +89,7 @@ def upgrade() -> None:
         sa.CheckConstraint("average_unit_cost >= 0", name="ck_inventory_valuations_average_unit_cost_nonnegative"),
         sa.CheckConstraint("valued_qty > 0 OR (inventory_value = 0 AND average_unit_cost = 0)", name="ck_inventory_valuations_zero_quantity_zero_value"),
         sa.ForeignKeyConstraint(["inventory_item_id"], ["inventory_items.id"], name="fk_inventory_valuations_inventory_item_id_inventory_items", ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["inventory_location_id"], ["inventory_locations.id"], name="fk_inventory_valuations_inventory_location_id_inventory_locations", ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["inventory_location_id"], ["inventory_locations.id"], name="fk_inv_valuations_location", ondelete="RESTRICT"),
         sa.PrimaryKeyConstraint("inventory_item_id", "inventory_location_id", name="pk_inventory_valuations"),
     )
 
@@ -112,7 +112,7 @@ def upgrade() -> None:
         sa.CheckConstraint("extended_cost IS NULL OR extended_cost >= 0", name="ck_stock_movements_extended_cost_nonnegative"),
         sa.ForeignKeyConstraint(["inventory_item_id"], ["inventory_items.id"], name="fk_stock_movements_inventory_item_id_inventory_items", ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["inventory_location_id"], ["inventory_locations.id"], name="fk_stock_movements_inventory_location_id_inventory_locations", ondelete="RESTRICT"),
-        sa.ForeignKeyConstraint(["stock_adjustment_line_id"], ["stock_adjustment_lines.id"], name="fk_stock_movements_stock_adjustment_line_id_stock_adjustment_lines", ondelete="RESTRICT"),
+        sa.ForeignKeyConstraint(["stock_adjustment_line_id"], ["stock_adjustment_lines.id"], name="fk_stock_movements_adjustment_line", ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["reverses_movement_id"], ["stock_movements.id"], name="fk_stock_movements_reverses_movement_id_stock_movements", ondelete="RESTRICT"),
         sa.ForeignKeyConstraint(["posted_by_user_id"], ["users.id"], name="fk_stock_movements_posted_by_user_id_users"),
         sa.PrimaryKeyConstraint("id", name="pk_stock_movements"),
