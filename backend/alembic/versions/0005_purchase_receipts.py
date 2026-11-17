@@ -97,7 +97,7 @@ def upgrade() -> None:
         "(stock_adjustment_line_id IS NOT NULL)::int + (purchase_receipt_line_id IS NOT NULL)::int = 1",
     )
 
-    op.execute("""
+    op.get_bind().exec_driver_sql("""
         CREATE FUNCTION reject_posted_purchase_receipt_mutation() RETURNS trigger AS $$
         BEGIN
             IF OLD.status = 'POSTED' THEN
@@ -113,7 +113,7 @@ def upgrade() -> None:
         BEFORE UPDATE OR DELETE ON purchase_receipts
         FOR EACH ROW EXECUTE FUNCTION reject_posted_purchase_receipt_mutation();
     """)
-    op.execute("""
+    op.get_bind().exec_driver_sql("""
         CREATE FUNCTION reject_posted_purchase_receipt_line_mutation() RETURNS trigger AS $
         DECLARE
             receipt_status text;
