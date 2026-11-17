@@ -296,3 +296,17 @@ def test_concurrent_refresh_requests_rotate_only_once(
         outcomes = list(pool.map(lambda _: attempt_refresh(), range(2)))
 
     assert sorted(outcomes) == [200, 401]
+
+
+def test_cors_preflight_allows_configured_frontend_origin(client: TestClient) -> None:
+    response = client.options(
+        "/api/auth/refresh",
+        headers={
+            "Origin": "http://localhost:5173",
+            "Access-Control-Request-Method": "POST",
+            "Access-Control-Request-Headers": "authorization,content-type",
+        },
+    )
+    assert response.status_code == 200
+    assert response.headers["access-control-allow-origin"] == "http://localhost:5173"
+    assert response.headers["access-control-allow-credentials"] == "true"

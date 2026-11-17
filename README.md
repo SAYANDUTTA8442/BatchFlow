@@ -218,7 +218,7 @@ Implementation will proceed in dependency order:
 | Phase | Focus | Exit condition |
 |---|---|---|
 | 1 | Requirements and data model | Domain model and transaction rules reviewed |
-| 2 | Backend foundation | FastAPI scaffold and reference migration are in place; authentication remains to be implemented |
+| 2 | Backend foundation and IAM | Implemented: FastAPI, PostgreSQL/Alembic, user/role persistence, Argon2, bearer JWT, rotating refresh sessions and integration tests |
 | 3 | Master data and inventory | Masters, units and source-linked stock ledger |
 | 4 | Production engine | BOM, production posting, yield and consumption variance tests |
 | 5 | Sales workflow | Order submission, admin review and stock checks |
@@ -244,7 +244,7 @@ Implementation will proceed in dependency order:
 | Production and inventory engine | Not implemented |
 | Sales, invoice and dispatch workflow | Not implemented |
 | Reports and exports | Not implemented |
-| Backend foundation tests and CI | Health/model tests and PostgreSQL migration CI added; benchmark workflow tests not implemented |
+| Backend foundation tests and CI | 15 tests passing in the latest verified run; PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; benchmark workflow tests not implemented |
 | Local PostgreSQL environment | Docker Compose service implemented; application deployment/demo not implemented |
 
 This table will be updated as verified work is committed.

@@ -42,6 +42,20 @@ class Settings(BaseSettings):
             raise ValueError("JWT_SECRET_KEY must contain at least 32 characters")
         if not self.jwt_key_id.strip():
             raise ValueError("JWT_KEY_ID must not be empty")
+        seen_key_ids = {self.jwt_key_id}
+        for entry in self.jwt_previous_keys.split(","):
+            if not entry.strip():
+                continue
+            if "=" not in entry:
+                raise ValueError("JWT_PREVIOUS_KEYS entries must use kid=secret format")
+            previous_id, previous_secret = entry.split("=", 1)
+            previous_id = previous_id.strip()
+            previous_secret = previous_secret.strip()
+            if not previous_id or len(previous_secret) < 32:
+                raise ValueError("Previous JWT keys need a non-empty id and 32-character secret")
+            if previous_id in seen_key_ids:
+                raise ValueError("JWT key identifiers must be unique")
+            seen_key_ids.add(previous_id)
         if self.app_environment == "production":
             if self.jwt_secret_key == _LOCAL_JWT_SECRET:
                 raise ValueError("Production requires a unique JWT_SECRET_KEY")

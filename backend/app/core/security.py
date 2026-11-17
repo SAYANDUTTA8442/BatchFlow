@@ -61,7 +61,7 @@ def decode_access_token(token: str) -> dict[str, Any]:
     for entry in settings.jwt_previous_keys.split(","):
         if "=" in entry:
             kid, secret = entry.split("=", 1)
-            if kid.strip() and secret.strip():
+            if kid.strip() and secret.strip() and kid.strip() != settings.jwt_key_id:
                 keyring[kid.strip()] = secret.strip()
     key = keyring.get(key_id)
     if key is None:

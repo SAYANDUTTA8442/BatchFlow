@@ -2,12 +2,12 @@
 
 **Document:** `docs/architecture.md`  
 **Product:** BatchFlow  
-**Status:** Proposed architecture baseline  
+**Status:** Architecture baseline; backend implementation in progress  
 **Version:** 1.0  
 **Last updated:** 2026-11-17  
 **Related document:** [Requirements.md](../Requirements.md)
 
-> This document describes the intended architecture. It does not claim that any application code, database schema, API, or deployment has been implemented.
+> This document describes the intended full system and its design constraints. A partial FastAPI/PostgreSQL backend and the initial IAM capability are implemented; business modules, frontend and deployment remain pending. See the repository README for the verified implementation boundary.
 
 ---
 
@@ -42,7 +42,7 @@ The system will begin as a modular monolith. There is no current requirement for
 | Schema migrations | Alembic | Versioned, reviewable schema changes |
 | Request validation | Pydantic | Validate API input and output contracts |
 | Automated tests | Pytest | Unit, integration and end-to-end benchmark tests |
-| Local environment | Docker Compose (planned) | Reproducible local setup |
+| Local environment | Docker Compose + PostgreSQL 16 | Reproducible local setup; database service implemented |
 | Inventory authority | Append-only stock-movement ledger | Auditable source of truth |
 | Financial arithmetic | Python `Decimal` and PostgreSQL `NUMERIC` | Avoid binary floating-point errors |
 | Authorization | Backend RBAC | Frontend visibility is not a security boundary |
@@ -395,6 +395,9 @@ The benchmark calculation and assumptions remain governed by [Requirements.md](.
 ## 9. Authentication, authorization and audit
 
 ### 9.1 Authentication
+
+The initial IAM implementation is present in `backend/app`: Argon2 password hashing, user and role persistence, 15-minute HS256 bearer JWTs with `kid`-based verification-key overlap, 256-bit opaque refresh tokens stored only as SHA-256 hashes, 30-day absolute session families, refresh rotation under row locks, reuse-triggered family revocation, Origin validation, credentialed CORS and a user-provisioning CLI. The initial integration tests exercise PostgreSQL-backed login, refresh, logout, role checks, inactive users and concurrent refresh requests. These endpoints are implemented; the complete business authorization matrix and administrative user-management interface remain pending.
+
 
 - Protected API operations require an authenticated user.
 - Passwords are stored as secure password hashes; plaintext passwords are never stored.
