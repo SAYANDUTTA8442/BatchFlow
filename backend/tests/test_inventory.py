@@ -297,6 +297,16 @@ def test_purchase_receipt_post_updates_wac_and_reconciles(
     assert Decimal(row["inventory_value"]) == Decimal("6900.00")
     assert Decimal(row["average_unit_cost"]) == Decimal("43.125000")
 
+    movement_response = client.get(
+        "/api/inventory/movements", headers={"Authorization": f"Bearer {token}"}
+    )
+    assert movement_response.status_code == 200
+    receipt_movement = next(
+        movement for movement in movement_response.json()
+        if movement["inventory_item_id"] == item_id and movement["purchase_receipt_line_id"] is not None
+    )
+    assert receipt_movement["stock_adjustment_line_id"] is None
+
     reconciliation = client.get(
         "/api/inventory/reconciliation", headers={"Authorization": f"Bearer {token}"}
     )
