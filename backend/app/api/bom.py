@@ -4,7 +4,7 @@ from typing import Annotated, Literal
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
 
-from app.api.dependencies import Principal, get_current_principal, require_roles
+from app.api.dependencies import Principal, require_roles
 from app.db.session import get_db
 from app.schemas.bom import BomCreate, BomRead, BomRetire, BomScaleRead, BomUpdate
 from app.services.bom import (

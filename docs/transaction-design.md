@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related documents:** [Requirements.md](../Requirements.md) · [System Architecture](./architecture.md) · [Database Schema](./database-schema.md)
 
-> This document defines the full intended application/database behavior. The implemented inventory slice includes stock-adjustment/opening-balance creation and posting, supplier purchase-receipt creation and posting, PostgreSQL row locks, atomic ledger/balance/valuation updates, the ADR-009 moving-WAC policy, audit events, idempotency and ledger-to-projection quantity/value reconciliation. Reservations, production, invoice, dispatch and payment transaction services remain design-only until implemented and verified against PostgreSQL integration tests.
+> This document defines the full intended application/database behavior. Verified implementations include stock-adjustment/opening-balance posting, supplier purchase receipts, exact-cost stock movement reversals, atomic ledger/projection updates, ADR-009 moving-WAC, audit/idempotency/reconciliation, and versioned BOM lifecycle management. Production-run posting, reservations, invoice, dispatch and payment transaction services remain design-only until implemented and verified against PostgreSQL integration tests.
 
 ---
 

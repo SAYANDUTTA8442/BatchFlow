@@ -4,7 +4,7 @@
 
 BatchFlow is a lightweight manufacturing operations and audit-support system under active development for small packaged-food manufacturers. It connects field sales orders, order verification, GST billing, dispatch, production, inventory, costing, collections and monthly reporting.
 
-> **Project status: IAM, master data and the initial inventory ledger are implemented.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds, stock-adjustment, supplier purchase-receipt and exact-cost stock-movement reversal posting, append-only stock movements, on-hand and moving-WAC projections, audit events, idempotency, ledger-to-projection reconciliation and CI. Production, sales, billing, dispatch, collections and frontend workflows remain unimplemented.
+> **Project status: IAM, master data, the inventory ledger/reversals, and versioned BOM management are implemented.** The backend includes FastAPI, PostgreSQL connectivity, role/user persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, role-protected master-data APIs, benchmark reference seeds, stock-adjustment, supplier purchase-receipt and exact-cost stock-movement reversal posting, append-only stock movements, on-hand and moving-WAC projections, audit events, idempotency, ledger-to-projection reconciliation and CI. Production-run posting, sales, billing, dispatch, collections and frontend workflows remain unimplemented.
 
 ---
 
@@ -220,7 +220,7 @@ Implementation will proceed in dependency order:
 | 1 | Requirements and data model | Domain model and transaction rules reviewed |
 | 2 | Backend foundation and IAM | Implemented: FastAPI, PostgreSQL/Alembic, user/role persistence, Argon2, bearer JWT, rotating refresh sessions and integration tests |
 | 3 | Master data and inventory foundation | Master data, stock adjustments/opening balances, supplier purchase receipts, append-only movement sources, balance/valuation projections, audit, idempotent posting and reconciliation implemented. Reversal and downstream stock workflows remain pending |
-| 4 | Production engine | BOM, production posting, yield and consumption variance tests |
+| 4 | Inventory ledger and reversals | Implemented: stock ledger, WAC, purchase receipts, reconciliation and exact-cost reversals |\n| 5 | Production foundation | Implemented: versioned BOM drafts, activation/retirement, effective-date protection and exact-decimal batch scaling |\n| 6 | Production execution | Production-run posting, material issues, finished-goods output, yield and consumption variance |
 | 5 | Sales workflow | Order submission, admin review and stock checks |
 | 6 | Billing and dispatch | GST invoice PDF and safe stock deduction |
 | 7 | Payments and costing | Payment allocation, outstanding and production cost |
@@ -238,11 +238,11 @@ Implementation will proceed in dependency order:
 | Database schema design | Documented; roles/units, IAM, master data, stock adjustments, supplier purchase receipts, stock movements, balance/valuation projections, audit and idempotency migrations implemented. Remaining business-document migrations are pending |
 | Transaction design | Documented in [docs/transaction-design.md](./docs/transaction-design.md); stock-adjustment and purchase-receipt posting with row locks, atomic projections, WAC, audit and idempotency implemented; quantity/value reconciliation implemented; reversals and other business transaction services pending |
 | Backend foundation | Implemented |
-| Backend API | Health, authentication, master-data, stock-adjustment and purchase-receipt posting, inventory balances, stock-movement reads and reconciliation endpoints implemented |
+| Backend API | Health, authentication, master-data, inventory posting/reconciliation/reversal and versioned BOM management/scaling endpoints implemented |
 | Authentication and RBAC | Login, refresh, logout, current-user endpoint and role dependency implemented; master-data writes are admin/owner-only and salesman customer lists are assignment-scoped |
 | Master-data API | Inventory items, products, customers, salesman assignments, suppliers, unit conversions and locations implemented |
 | Frontend application | Not implemented |
-| Production and inventory engine | Stock-adjustment and supplier purchase-receipt ledger posting, moving-WAC valuation and projection reconciliation implemented; production issues/outputs, reservations and dispatch integration pending |
+| Production and inventory engine | Stock-adjustment and supplier purchase-receipt ledger posting, moving-WAC valuation, projection reconciliation, exact-cost reversals and versioned BOM management implemented; production-run issues/outputs, reservations and dispatch integration pending |
 | Sales, invoice and dispatch workflow | Not implemented |
 | Reports and exports | Not implemented |
 | Backend tests and CI | 34 tests passing in the latest verified run; Ruff, PostgreSQL migrations, model parity and idempotent reference seeding checked in CI; full benchmark workflow tests not implemented |

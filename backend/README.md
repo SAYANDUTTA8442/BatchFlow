@@ -49,7 +49,7 @@ All routes require a bearer access token. Writes require the admin or owner role
 
 Salesmen can read only customers assigned to them. Product records must reference an active FINISHED_GOOD inventory item. Unit conversions are rejected when units have different dimensions. Master-data records do not accept opening-stock quantities; stock initialization will be implemented through the inventory ledger.
 
-## Security boundary
+## Production BOM endpoints\n\nBOM writes require the admin or owner role; reads are available to admin, owner, auditor and production roles.\n\n- GET, POST /api/production/boms\n- GET, PUT /api/production/boms/{bom_id}\n- POST /api/production/boms/{bom_id}/activate\n- POST /api/production/boms/{bom_id}/retire\n- GET /api/production/boms/{bom_id}/scale?batch_multiplier=1.5\n\nBOM versions are assigned per product under a product-row lock. Drafts can be edited; activated versions and their lines are protected by PostgreSQL triggers. Activation rejects overlapping active effective-date ranges. Component categories must match the line type, and quantities are stored in the component inventory item's base unit. Batch scaling uses Decimal and returns six-place quantities. Production posting and stock effects are not part of this BOM milestone.\n\n## Security boundary
 
 Refresh-token raw values are returned only as HttpOnly cookies; only SHA-256 hashes are persisted. Consumed token hashes are retained for reuse detection. Reuse revokes the entire session family. Access JWTs are stateless and may remain valid until their 15-minute expiry after logout, as specified in ADR-008.
 
