@@ -2,13 +2,11 @@ import uuid
 from collections.abc import Generator
 from decimal import Decimal
 
-import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session, sessionmaker
 
 from app.core.config import get_settings
-from app.core.security import decode_access_token
 from app.db.base import Base
 from app.db.seed_reference_data import seed_reference_data
 from app.db.session import get_db
@@ -17,7 +15,6 @@ from app.models import (
     InventoryBalance,
     InventoryItem,
     InventoryLocation,
-    InventoryValuation,
     StockMovement,
     Unit,
     User,
@@ -174,10 +171,12 @@ def test_idempotent_post_does_not_duplicate_stock_movement(
     second = _post(client, token, adjustment_id, "same-post-key")
     assert first.status_code == second.status_code == 200
     assert first.json() == second.json()
-    count = db.scalar(
-        select(StockMovement.id).where(StockMovement.stock_adjustment_line_id.is_not(None))
+    count = len(
+        db.scalars(
+            select(StockMovement).where(StockMovement.inventory_item_id == item_id)
+        ).all()
     )
-    assert count is not None
+    assert count == 1
 
 
 def test_insufficient_stock_rolls_back_entire_adjustment(
