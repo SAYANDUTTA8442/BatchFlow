@@ -1,5 +1,3 @@
-from decimal import Decimal
-
 from fastapi import HTTPException, status
 from sqlalchemy import delete, select
 from sqlalchemy.exc import IntegrityError

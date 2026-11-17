@@ -1,17 +1,15 @@
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.api.dependencies import Principal, get_current_principal, require_roles
 from app.db.session import get_db
 from app.models import (
-    Customer,
     CustomerSalesman,
     InventoryItem,
     InventoryLocation,
-    Product,
     Supplier,
     Unit,
     UnitConversion,
