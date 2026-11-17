@@ -52,7 +52,7 @@ def user(db: Session) -> User:
     return create_user(
         db,
         full_name="IAM Test User",
-        email=f"iam-{uuid.uuid4().hex}@example.test",
+        email=f"iam-{uuid.uuid4().hex}@example.com",
         password="A-Strong-Test-Password-123!",
         role_codes=["admin"],
     )
