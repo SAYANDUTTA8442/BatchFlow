@@ -7,7 +7,7 @@
 **Last updated:** 2026-11-17  
 **Related documents:** [Requirements.md](../Requirements.md) · [architecture.md](./architecture.md)
 
-> This document remains the full logical/relational design specification; it is not a claim that every table below is implemented. Migration `0004_inventory_ledger` and matching SQLAlchemy models implement stock adjustments, adjustment lines, the adjustment-sourced stock-movement ledger, on-hand and moving-WAC projections, audit events and idempotency records. The current posting API supports stock-adjustment/opening-balance and supplier purchase-receipt sources. Production, reservations, invoices, dispatch, payments and their additional movement-source foreign keys remain design-only and must be implemented and verified in later migrations.
+> This document remains the full logical/relational design specification; it is not a claim that every table below is implemented. Migrations `0004_inventory_ledger` and `0005_purchase_receipts`, with matching SQLAlchemy models, implement stock adjustments, adjustment lines, supplier purchase receipts and receipt lines, source-linked stock movements, on-hand and moving-WAC projections, audit events and idempotency records. The current posting API supports stock-adjustment/opening-balance and supplier purchase-receipt sources. Production, reservations, invoices, dispatch, payments and their additional movement-source foreign keys remain design-only and must be implemented and verified in later migrations.
 
 ---
 
