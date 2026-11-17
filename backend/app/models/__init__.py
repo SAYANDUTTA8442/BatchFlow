@@ -1,4 +1,5 @@
 from app.models.auth import AuthRefreshToken, AuthSession
+from app.models.bom import Bom, BomLine
 from app.models.inventory import (
     AuditEvent,
     IdempotencyRecord,
@@ -26,6 +27,8 @@ __all__ = [
     "AuditEvent",
     "AuthRefreshToken",
     "AuthSession",
+    "Bom",
+    "BomLine",
     "Customer",
     "CustomerSalesman",
     "IdempotencyRecord",
