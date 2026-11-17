@@ -282,11 +282,24 @@ Order submission transaction:
 2. Verify authenticated user has the salesman role.
 3. Verify customer is active and assigned to that salesman.
 4. Validate active products, positive quantities and price source.
-5. Persist order header and line snapshots in SUBMITTED state.
+5. Persist order header and line snapshots in SUBMITTED state; initialize immutable submitted_quantity/submitted_unit_price alongside the current quantity/unit_price values.
 6. Record audit event and idempotency response.
 7. Commit.
 
 Submission does not reserve or deduct stock.
+
+### 7.2.1 Admin review edits
+
+Before approval, an authorized admin may revise order-line quantity and/or unit price. Each review-edit transaction must:
+
+1. Lock the order header FOR UPDATE and verify status is SUBMITTED.
+2. Load the affected line and retain its current quantity/unit price as the before snapshot.
+3. Validate the new quantity against the selected unit's input precision and validate the price.
+4. Update only the current quantity/unit_price fields; submitted_quantity/submitted_unit_price remain immutable.
+5. Insert a SALES_ORDER_LINES_REVISED audit event. before_data and after_data must include each affected line ID and the complete prior/new quantity and unit-price values.
+6. Commit the line changes and audit event atomically.
+
+After approval or rejection, order-line values are immutable. Multiple review edits are allowed while SUBMITTED; each edit creates its own audit event, so the sequence can be reconstructed without a separate order-revision table.
 
 ### 7.3 Approval
 
