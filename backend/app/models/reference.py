@@ -39,5 +39,9 @@ class Unit(Base):
     name: Mapped[str] = mapped_column(String(80), nullable=False)
     dimension: Mapped[str] = mapped_column(String(20), nullable=False)
     input_decimal_places: Mapped[int] = mapped_column(SmallInteger, nullable=False)
-    is_base_unit: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default=text("false"))
-    is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True, server_default=text("true"))
+    is_base_unit: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default=text("false")
+    )
+    is_active: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true")
+    )
