@@ -235,6 +235,7 @@ Implementation will proceed in dependency order:
 | Product requirements | Documented in [Requirements.md](./Requirements.md) |
 | Architecture design | Documented in [docs/architecture.md](./docs/architecture.md) |
 | Database schema design | Documented in [docs/database-schema.md](./docs/database-schema.md); migrations not implemented |
+| Transaction design | Documented in [docs/transaction-design.md](./docs/transaction-design.md); transaction services not implemented |
 | Backend API | Not implemented |
 | Frontend application | Not implemented |
 | Authentication and RBAC | Not implemented |
@@ -259,8 +260,9 @@ This table will be updated as verified work is committed.
 - [Product Requirements — Requirements.md](./Requirements.md): detailed scope, functional and non-functional requirements, benchmark scenario, assumptions and acceptance tests.
 - [System Architecture — docs/architecture.md](./docs/architecture.md): proposed modules, layers, transaction boundaries, security and testing strategy.
 - [Database Schema — docs/database-schema.md](./docs/database-schema.md): proposed entities, relationships, constraints, inventory ledger and migration order.
+- [Transaction Design — docs/transaction-design.md](./docs/transaction-design.md): atomic posting protocols, row locking, idempotency, WAC valuation, reservation, dispatch, payment and rollback rules.
 
-Setup, API contract, transaction-design, testing and deployment documentation will be added as implementation progresses.
+Setup, API contract, testing and deployment documentation will be added as implementation progresses.
 
 ---
 
