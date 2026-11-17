@@ -114,7 +114,7 @@ def upgrade() -> None:
         FOR EACH ROW EXECUTE FUNCTION reject_posted_purchase_receipt_mutation();
     """)
     op.execute("""
-        CREATE FUNCTION reject_posted_purchase_receipt_line_mutation() RETURNS trigger AS $
+        CREATE FUNCTION reject_posted_purchase_receipt_line_mutation() RETURNS trigger AS $$
         DECLARE
             receipt_status text;
             parent_receipt_id bigint;
@@ -136,7 +136,7 @@ def upgrade() -> None:
             END IF;
             RETURN NEW;
         END;
-        $ LANGUAGE plpgsql;
+        $$ LANGUAGE plpgsql;
     """)
     op.execute("""
         CREATE TRIGGER purchase_receipt_lines_immutable
