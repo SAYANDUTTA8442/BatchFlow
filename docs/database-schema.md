@@ -258,14 +258,16 @@ Unique: (bom_id, inventory_item_id). The referenced item category must match lin
 | batch_multiplier | NUMERIC(18,6) | NOT NULL CHECK (> 0) |
 | expected_output_qty | NUMERIC(18,6) | NOT NULL CHECK (> 0), snapshot |
 | actual_good_output_qty | NUMERIC(18,6) | NULL until recorded; CHECK (>= 0) |
-| status | VARCHAR(20) | CHECK IN (DRAFT, POSTED, REVERSED) |
+| status | VARCHAR(20) | NOT NULL CHECK IN (DRAFT, POSTED, REVERSED) |
+| total_run_cost | NUMERIC(18,2) | NULL until posted; NOT NULL and >= 0 when POSTED |
+| cost_per_good_unit | NUMERIC(18,6) | NULL until posted; NOT NULL and >= 0 when POSTED with positive output |
 | production_date | DATE | NOT NULL |
 | supervisor_user_id | BIGINT | FK → users.id, NOT NULL |
 | posted_at | TIMESTAMPTZ | NULL until posted |
 | posted_by_user_id | BIGINT | FK → users.id, NULL |
 | created_at / updated_at | TIMESTAMPTZ | Standard timestamps |
 
-A posted run is immutable. A correction preserves the original run and creates a documented reversal/correction workflow. Define that workflow before implementing it.
+A posted run is immutable. At posting, persist total_run_cost as the sum of material/packaging line costs and production cost lines, and persist cost_per_good_unit = total_run_cost / actual_good_output_qty at the documented precision. These snapshots make historical reports independent of later master-data or calculation changes. The MVP rejects zero-good-output posting when positive costs exist; therefore a posted run must have positive good output and a non-null unit-cost snapshot. A correction preserves the original run and creates a documented reversal/correction workflow; production-run reversal remains outside the initial MVP.
 
 ### 6.4 production_run_lines
 
@@ -336,7 +338,7 @@ Posting creates positive stock movements and updates valuation/balance projectio
 | order_number | VARCHAR(60) | NOT NULL UNIQUE |
 | customer_id | BIGINT | FK → customers.id, NOT NULL |
 | salesman_user_id | BIGINT | FK → users.id, NOT NULL |
-| status | VARCHAR(24) | CHECK IN (SUBMITTED, APPROVED, REJECTED, INVOICED, DISPATCHED) |
+| status | VARCHAR(24) | NOT NULL CHECK IN (SUBMITTED, APPROVED, REJECTED, CANCELLED, INVOICED, DISPATCHED) |
 | submitted_at | TIMESTAMPTZ | NOT NULL |
 | reviewed_at | TIMESTAMPTZ | NULL |
 | reviewed_by_user_id | BIGINT | FK → users.id, NULL |
@@ -368,7 +370,7 @@ Represents stock committed to an approved order without reducing physical on-han
 
 id BIGINT identity primary key; sales_order_id BIGINT FK → sales_orders.id NOT NULL; sales_order_line_id BIGINT FK → sales_order_lines.id NOT NULL; inventory_item_id BIGINT FK → inventory_items.id NOT NULL; quantity_reserved NUMERIC(18,6) NOT NULL CHECK (> 0); quantity_consumed NUMERIC(18,6) NOT NULL DEFAULT 0 CHECK (>= 0); status VARCHAR(20) CHECK IN (ACTIVE, CONSUMED, RELEASED); created_at TIMESTAMPTZ NOT NULL DEFAULT now(); released_at TIMESTAMPTZ NULL.
 
-Consumed quantity cannot exceed reserved quantity. Active reservations reduce available-to-promise, not on-hand. Exact partial-dispatch and release rules remain open decisions.
+Consumed quantity cannot exceed reserved quantity. Add UNIQUE(sales_order_line_id) for the MVP: each approved order line has one reservation row. The reservation's sales_order_id and inventory_item_id must match its referenced order line/product inventory item; enforce this in the service or with composite foreign keys. Active reservations reduce available-to-promise, not on-hand. On cancellation before invoice issuance, release every ACTIVE reservation in the same transaction and set released_at; cancellation after invoice issuance is rejected in the MVP. Dispatch consumes the linked reservation atomically with the physical stock issue. Partial dispatch is not supported.
 
 ## 9. Billing and invoice tables
 
@@ -431,15 +433,15 @@ Line totals must reconcile with invoice header totals. Enforce this in the issua
 
 ### 10.1 dispatches
 
-id BIGINT identity primary key; dispatch_number VARCHAR(60) NOT NULL UNIQUE; invoice_id BIGINT FK → invoices.id NOT NULL; dispatched_at TIMESTAMPTZ NOT NULL; dispatched_by_user_id BIGINT FK → users.id NOT NULL; status VARCHAR(20) CHECK IN (POSTED, REVERSED); created_at TIMESTAMPTZ NOT NULL DEFAULT now().
+id BIGINT identity primary key; dispatch_number VARCHAR(60) NOT NULL UNIQUE; invoice_id BIGINT FK → invoices.id NOT NULL UNIQUE; dispatched_at TIMESTAMPTZ NOT NULL; dispatched_by_user_id BIGINT FK → users.id NOT NULL; status VARCHAR(20) NOT NULL CHECK IN (POSTED, REVERSED); posted_at TIMESTAMPTZ NOT NULL; created_at TIMESTAMPTZ NOT NULL DEFAULT now().
 
-For the first MVP, use one full dispatch per invoice unless partial dispatch is explicitly approved. If full-only, add UNIQUE(invoice_id). If partial dispatch is supported, enforce cumulative dispatched quantity against invoice lines.
+The unique constraint on invoice_id enforces the MVP's one-full-dispatch-per-invoice rule, including after a dispatch is reversed. Re-dispatch after reversal is not supported; use a separately designed correction workflow. posted_at is set in the same transaction as stock movement creation and the POSTED transition.
 
 ### 10.2 dispatch_lines
 
-id BIGINT identity primary key; dispatch_id BIGINT FK → dispatches.id NOT NULL; invoice_line_id BIGINT FK → invoice_lines.id NOT NULL; inventory_item_id BIGINT FK → inventory_items.id NOT NULL; quantity_dispatched NUMERIC(18,6) NOT NULL CHECK (> 0).
+id BIGINT identity primary key; dispatch_id BIGINT FK → dispatches.id NOT NULL; invoice_line_id BIGINT FK → invoice_lines.id NOT NULL; order_reservation_id BIGINT FK → order_reservations.id NOT NULL; inventory_item_id BIGINT FK → inventory_items.id NOT NULL; quantity_dispatched NUMERIC(18,6) NOT NULL CHECK (> 0).
 
-A posted dispatch line creates a negative finished-goods movement. The invoice line and dispatch line must identify the same product inventory item; enforce this in the service or with composite foreign keys.
+Unique: (dispatch_id, invoice_line_id); UNIQUE(order_reservation_id). Each full-dispatch line must link to the reservation for the same sales-order line and the same finished-good inventory item. The dispatch quantity must equal both the invoice-line quantity and the reservation's unconsumed quantity; enforce these cross-table equalities in the posting service and PostgreSQL integration tests (or carefully designed composite foreign keys/triggers). A posted dispatch line creates exactly one negative finished-goods movement. Reservation consumption and movement posting occur in the same transaction.
 
 ## 11. Receivables and payment tables
 
@@ -479,7 +481,7 @@ This is the authoritative physical stock ledger. Rows are append-only after post
 | posted_at | TIMESTAMPTZ | NOT NULL |
 | posted_by_user_id | BIGINT | FK → users.id, NULL for controlled seed/system posting |
 
-Exactly one source-line FK must be populated for each movement. Enforce with a CHECK constraint. Add uniqueness on the appropriate source-line/movement combination to prevent duplicate posting. A reversal references the original movement and uses the opposite quantity sign; validate reversal correctness in the posting service and tests.
+Exactly one of purchase_receipt_line_id, production_run_line_id, production_run_output_id, dispatch_line_id or stock_adjustment_line_id must be non-NULL for every movement; enforce this with a CHECK constraint. Add one partial unique index per source column, e.g. UNIQUE(purchase_receipt_line_id) WHERE purchase_receipt_line_id IS NOT NULL, and equivalent indexes for the other four source-line columns. This enforces one movement per source line and prevents duplicate posting independently of API idempotency. A reversal is represented by a new movement sourced from a dedicated stock-adjustment line with movement_type = REVERSAL, reverses_movement_id pointing to the original movement, and the opposite quantity sign. Add UNIQUE(reverses_movement_id) WHERE reverses_movement_id IS NOT NULL so an original movement can be reversed at most once. Validate item, location, absolute quantity and opposite sign against the original in the posting service and integration tests. The reversal's stock-adjustment source line preserves the ordinary source-line FK guarantee.
 
 Explicit source-line foreign keys are preferred to a free-form source_type + source_id pair because ordinary foreign keys can protect source-line existence. The source header is reached through the source line.
 
@@ -496,7 +498,7 @@ A transactionally maintained projection for fast stock reads.
 | on_hand_qty | NUMERIC(18,6) | NOT NULL DEFAULT 0 CHECK (>= 0) |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 
-Composite primary key: (inventory_item_id, inventory_location_id). Update in the same transaction as its stock movement. Reconciliation compares on_hand_qty with SUM(stock_movements.quantity_delta) for the same item/location. Never update this projection without writing a corresponding ledger movement.
+Composite primary key: (inventory_item_id, inventory_location_id). Update in the same transaction as its stock movement. Reconciliation compares on_hand_qty with SUM(stock_movements.quantity_delta) for the same item/location. Never update this projection without writing a corresponding ledger movement. The composite primary key is also the row-lock target for stock-sensitive transactions; create the row during controlled item/location initialization so posting code can reliably lock it.
 
 ### 12.3 inventory_valuations
 
@@ -511,7 +513,7 @@ Current moving weighted-average valuation projection per item/location.
 | average_unit_cost | NUMERIC(18,6) | NOT NULL DEFAULT 0 CHECK (>= 0) |
 | updated_at | TIMESTAMPTZ | NOT NULL DEFAULT now() |
 
-Composite primary key: (inventory_item_id, inventory_location_id). This is a valuation projection, not a replacement for movement cost snapshots. Receipt and issue posting update it transactionally under the same item/location lock. Define WAC rounding and negative-stock policy in the transaction design. Negative stock is prohibited in the MVP.
+Composite primary key: (inventory_item_id, inventory_location_id). This is a valuation projection, not a replacement for movement cost snapshots. Receipt and issue posting update it transactionally under the same item/location lock. WAC calculations retain internal Decimal precision; inventory_value is persisted to two decimal places and average_unit_cost to six decimal places. The transaction design must define the exact rounding point for each update. Negative stock is prohibited in the MVP. For production output, the movement records unit_cost = production_runs.cost_per_good_unit and extended_cost = production_runs.total_run_cost; the valuation projection adds the good-output quantity and total run cost atomically with the output movement.
 
 ### 12.4 stock_adjustments and stock_adjustment_lines
 
@@ -564,9 +566,9 @@ The generic entity reference is acceptable here because audit events intentional
 
 Protects retried post requests from repeating business effects.
 
-id BIGINT identity primary key; scope VARCHAR(80) NOT NULL; idempotency_key VARCHAR(160) NOT NULL; request_hash VARCHAR(128) NOT NULL; response_status INTEGER NULL until completed; response_body JSONB NULL until completed; created_at TIMESTAMPTZ NOT NULL DEFAULT now(); completed_at TIMESTAMPTZ NULL.
+id BIGINT identity primary key; actor_user_id BIGINT FK → users.id NOT NULL; operation VARCHAR(80) NOT NULL; idempotency_key VARCHAR(160) NOT NULL; request_hash VARCHAR(128) NOT NULL; response_status INTEGER NULL until completed; response_body JSONB NULL until completed; created_at TIMESTAMPTZ NOT NULL DEFAULT now(); completed_at TIMESTAMPTZ NULL.
 
-Unique: (scope, idempotency_key). Persist this record and the business effect in the same transaction. Reuse with a different request hash is rejected. Same-key/same-payload retry returns the original result.
+Unique: (actor_user_id, operation, idempotency_key). actor_user_id identifies the authenticated user or a dedicated system/service user; operation is a stable operation identifier such as production.post or dispatch.post. The unique key scopes retries to both actor and operation, not merely to a client-chosen key. Persist this record and the business effect in the same transaction. Reuse with a different request hash is rejected. Same-key/same-payload retry returns the original status/body. Enforce that response_status and response_body are both NULL while in progress and both non-NULL when completed_at is non-NULL, using a CHECK constraint.
 
 ## 14. Key constraints and indexes
 
@@ -581,8 +583,12 @@ At minimum:
 - sales_orders(order_number), purchase_receipts(receipt_number), production_runs(run_number)
 - invoices(sales_order_id) for one invoice per order in MVP
 - invoices(invoice_number), invoice_series(series_code, financial_year)
-- dispatches(dispatch_number)
-- idempotency_records(scope, idempotency_key)
+- dispatches(dispatch_number), dispatches(invoice_id)
+- order_reservations(sales_order_line_id)
+- dispatch_lines(dispatch_id, invoice_line_id), dispatch_lines(order_reservation_id)
+- Each stock_movements source-line FK (partial unique index where non-NULL)
+- stock_movements(reverses_movement_id) (partial unique index where non-NULL)
+- idempotency_records(actor_user_id, operation, idempotency_key)
 - Composite primary keys described for link and balance tables.
 
 ### 14.2 Check constraints
@@ -591,7 +597,12 @@ At minimum:
 - Non-zero posted stock movement quantity.
 - Exactly one stock movement source-line FK populated.
 - Non-negative planned and actual production quantities.
-- Reservation consumed quantity does not exceed reserved quantity.
+- Reservation consumed quantity does not exceed reserved quantity; one reservation per sales-order line in the MVP.
+- A dispatch references one reservation exactly once and its line quantity matches the full invoice line and unconsumed reservation quantity.
+- Stock movements populate exactly one source-line FK; each source line and each reversed movement can be posted/reversed at most once.
+- Posted production runs have non-NULL total cost and cost-per-good-unit snapshots, and positive good output under the MVP policy.
+- Posted purchase receipts and dispatches have non-NULL posted timestamps; status/timestamp combinations are consistent.
+- Idempotency response status/body/completion timestamp are mutually consistent.
 - Non-negative invoice tax and totals.
 - Positive payment allocations.
 - Non-negative inventory on-hand and valuation quantities.
@@ -606,12 +617,15 @@ Recommended indexes:
 
 - Foreign-key columns used in joins and delete/restriction checks.
 - sales_orders(status, submitted_at)
+- order_reservations(sales_order_id, status) WHERE status = 'ACTIVE'
+- order_reservations(sales_order_line_id) UNIQUE
 - sales_orders(salesman_user_id, submitted_at)
 - sales_orders(customer_id, submitted_at)
 - purchase_receipts(receipt_date, status)
 - production_runs(production_date, status)
 - invoices(invoice_date, customer_state_code_snapshot)
 - payment_allocations(invoice_id)
+- payment_allocations(payment_id)
 - payments(customer_id, payment_date)
 - stock_movements(inventory_item_id, inventory_location_id, posted_at)
 - Each stock movement source FK
@@ -694,24 +708,51 @@ Do not add these without a concrete requirement:
 
 These may be future extensions. Keep the initial schema small enough to understand and test.
 
-## 18. Open decisions before migrations
+## 18. Remaining decisions before migrations
 
-Resolve these before the relevant migration or workflow is finalized:
+The following are genuinely unresolved and must be decided before implementing their respective workflows:
 
 1. Authentication sessions: cookie session versus bearer token, and whether a persisted session table is required.
-2. Reservation lifecycle: release behavior on rejected/cancelled orders and whether reservations are mandatory in MVP.
-3. Partial dispatch: full dispatch only or multiple dispatches per invoice.
-4. Invoice correction: cancellation/credit-note data model and numbering rules.
-5. Payment edge cases: overpayments, unallocated receipts and allocation changes.
-6. Inventory location policy: one seeded factory location versus location selection in UI.
-7. Unit precision: allowed precision and rounding for each stocked item.
-8. WAC policy: exact receipt/issue update and rounding policy, including reversals.
-9. Production correction: reversal and re-posting model for a posted run.
-10. Order review history: whether a dedicated order-revision table is required beyond audit events.
+2. Invoice correction: cancellation/credit-note data model and numbering rules. The initial MVP rejects correction of an issued invoice.
+3. Unit precision: allowed input precision and rounding policy for each stocked item.
+4. WAC rounding: exact intermediate precision and rounding points for receipt, issue, production output and reversal calculations. The selected method remains moving weighted average per item/location.
+5. Production correction: reversal/re-posting model for a posted run. The initial MVP does not expose production-run reversal.
+6. Order review history: whether a dedicated order-revision table is needed beyond audit events.
 
-Do not silently choose behavior for these cases in endpoint code. Record decisions in docs/transaction-design.md or a short architecture decision record before implementation.
+The following transaction choices are already resolved and must not be re-opened in endpoint code: reservations are created for full approved order lines and released on pre-invoice cancellation; dispatch is one full dispatch per invoice; payments must be fully allocated without over-allocation; one factory location is seeded; and stock uses moving weighted-average costing.
 
-## 19. Proposed migration order
+## 19. Resolved schema-to-transaction decisions
+
+This section records the relational representation of the decisions in [transaction-design.md](./transaction-design.md). These are project implementation choices, not claims that the internship problem statement mandates these exact database mechanisms.
+
+| Decision | Relational representation | Enforcement |
+|---|---|---|
+| Order cancellation before invoicing | CANCELLED sales-order status | Service transition guard; cancellation releases ACTIVE reservations atomically |
+| Reservation-to-dispatch traceability | dispatch_lines.order_reservation_id | FK + unique constraint; service verifies order line, product item and full quantity match |
+| One stock movement per source line | Five explicit source-line FKs | Exactly-one-source CHECK + one partial unique index per source FK |
+| No duplicate reversal | reverses_movement_id | Partial unique index; reversal sourced by a stock-adjustment line |
+| One full dispatch per invoice | dispatches.invoice_id UNIQUE | Database uniqueness; reversed dispatch cannot be re-dispatched in MVP |
+| Historical production costing | production_runs.total_run_cost, cost_per_good_unit | Persisted at posting; required for POSTED runs |
+| Finished-goods valuation | Production-output movement cost snapshots | Add good quantity and total run cost to valuation projection in the same transaction |
+| Idempotency scope | actor_user_id, operation, idempotency_key | Composite unique constraint; request hash protects payload reuse |
+| Posted-document lifecycle | Status plus posted_at on posting documents | Service transition guards and CHECK constraints for status/timestamp consistency |
+| Reservation ATP access | Active-reservation query index | Composite index filtered to ACTIVE rows |
+| Payment allocation access | Indexes by payment and invoice | Cross-row amount/customer/outstanding checks in one locked transaction |
+
+### 19.1 Required cross-row service invariants
+
+The following cannot be expressed safely as ordinary row-level CHECK constraints:
+
+- Reservation sales_order_id and inventory_item_id must agree with its referenced order line and product.
+- A dispatch line's invoice line, reservation, order line and inventory item must all refer to the same ordered product.
+- Full dispatch quantity must equal the invoice-line quantity and the reservation's unconsumed quantity.
+- Payment customer must match invoice customer; allocations must not exceed payment amount or invoice outstanding.
+- Production-run total cost must equal material/packaging line costs plus production cost lines; cost per good unit must equal total cost divided by positive good output.
+- Posted-document status and timestamps must be transitioned together; use CHECK constraints for row-local combinations and service-level guards for state transitions.
+
+Implement these checks in domain services and PostgreSQL integration tests. Add triggers only if a specific invariant must also be protected from non-application writers and the trigger remains straightforward to audit.
+
+## 20. Proposed migration order
 
 Build the schema in dependency order. Keep migrations small and reviewable.
 
@@ -730,7 +771,7 @@ Build the schema in dependency order. Keep migrations small and reviewable.
 13. Stock adjustments, stock movements, inventory balances and valuations.
 14. Payments and allocations.
 15. Audit events and idempotency records.
-16. Indexes, partial unique constraints and any carefully justified triggers.
+16. Foreign-key completion, row-local CHECK constraints, partial unique indexes and query indexes.
 
 Exact migration grouping may change to resolve circular foreign keys. Do not create all tables in one unreviewable migration.
 
