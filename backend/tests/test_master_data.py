@@ -1,13 +1,48 @@
 import uuid
+from collections.abc import Generator
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy import create_engine, select
+from sqlalchemy.orm import Session, sessionmaker
 
+from app.core.config import get_settings
+from app.db.base import Base
+from app.db.seed_reference_data import seed_reference_data
 from app.db.session import get_db
+from app.main import app
 from app.models import InventoryItem, Unit, User
 from app.services.auth import create_user
+
+
+@pytest.fixture(scope="module")
+def auth_engine():
+    engine = create_engine(get_settings().database_url, pool_pre_ping=True)
+    Base.metadata.create_all(engine)
+    factory = sessionmaker(bind=engine, class_=Session, expire_on_commit=False)
+    with factory.begin() as session:
+        seed_reference_data(session)
+    yield engine
+    Base.metadata.drop_all(engine)
+    engine.dispose()
+
+
+@pytest.fixture
+def db(auth_engine) -> Generator[Session, None, None]:
+    factory = sessionmaker(bind=auth_engine, class_=Session, expire_on_commit=False)
+    with factory() as session:
+        yield session
+
+
+@pytest.fixture
+def user(db: Session) -> User:
+    return create_user(
+        db,
+        full_name="Master Data Admin",
+        email=f"admin-{uuid.uuid4().hex}@example.com",
+        password="A-Strong-Test-Password-123!",
+        role_codes=["admin"],
+    )
 
 
 def _login(client: TestClient, user: User) -> str:
