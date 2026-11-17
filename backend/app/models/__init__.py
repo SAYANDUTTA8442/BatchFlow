@@ -20,6 +20,7 @@ from app.models.master_data import (
     Supplier,
     UnitConversion,
 )
+from app.models.production import ProductionRun, ProductionRunLine
 from app.models.reference import Role, Unit
 from app.models.user import User, UserRole
 
@@ -37,6 +38,8 @@ __all__ = [
     "InventoryLocation",
     "InventoryValuation",
     "Product",
+    "ProductionRun",
+    "ProductionRunLine",
     "PurchaseReceipt",
     "PurchaseReceiptLine",
     "Role",

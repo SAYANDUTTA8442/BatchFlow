@@ -666,3 +666,15 @@ The detailed acceptance criteria and benchmark values remain defined by [Require
 ---
 
 **BatchFlow — From Order to Audit.**
+
+
+## Production planning boundary
+
+The production module currently has two implemented capabilities:
+
+1. Versioned BOM authoring, activation/retirement, effective-date validation and exact-decimal batch scaling.
+2. Draft production-run planning from an effective activated BOM.
+
+A draft run persists the selected BOM ID/version and scaled plan, alongside product, finished-good item, component item and unit snapshots. The production service locks the selected BOM, product and relevant inventory-item rows while validating the date and capturing the snapshots. It is a planning record only: it does not post stock movements or update inventory balance/valuation projections.
+
+Production posting is a separate transaction boundary. Actual material/packaging issues, good finished-goods output, WAC cost snapshots, overhead allocation, variances, idempotency and atomic audit/ledger effects remain future work. Do not treat a DRAFT run as physical stock consumption or production output.

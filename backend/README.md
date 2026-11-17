@@ -72,3 +72,16 @@ The request-scoped SQLAlchemy dependency closes the session but does not commit.
 ## Current implementation boundary
 
 IAM includes user/role persistence, Argon2 password hashing, bearer JWT authentication, rotating refresh sessions, Origin validation, logout and a user-provisioning CLI. Master data includes inventory items, products, customers and salesman assignments, suppliers, unit conversions and the factory location. Stock ledger posting, opening balances and versioned BOM management are implemented. Production-run posting, sales, billing, dispatch, collections and frontend workflows remain unimplemented.
+
+
+## Production planning endpoints
+
+Production-run planning is restricted to the `production` role. Admin, owner, auditor and production roles can read plans.
+
+- `POST /api/production/runs` — create a DRAFT plan from an activated BOM effective on the production date.
+- `GET /api/production/runs` — list plans; optional `production_date` and `status` filters.
+- `GET /api/production/runs/{run_id}` — retrieve a plan and its persisted component snapshots.
+
+The request supplies `bom_id`, `production_date` and a positive decimal `batch_multiplier`. The API snapshots product identity, finished-good item/unit, BOM version, component codes/names/base units, per-batch quantities, scaled planned quantities and expected good output. Run numbers are assigned as `PR-YYYYMMDD-<id>`.
+
+Creating a DRAFT plan does not issue raw materials, receive finished goods, update stock balances/valuation, or calculate actual consumption/cost/variance. Those operations belong to the later production-posting workflow.

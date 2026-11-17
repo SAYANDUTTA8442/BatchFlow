@@ -6,11 +6,12 @@ from app.api.bom import router as bom_router
 from app.api.health import router as health_router
 from app.api.inventory import router as inventory_router
 from app.api.master_data import router as master_data_router
+from app.api.production import router as production_router
 from app.core.config import get_settings
 
 
 settings = get_settings()
-app = FastAPI(title=settings.app_name, version="0.4.0")
+app = FastAPI(title=settings.app_name, version="0.5.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=sorted(settings.origin_allowlist),
@@ -23,3 +24,4 @@ app.include_router(auth_router)
 app.include_router(master_data_router)
 app.include_router(inventory_router)
 app.include_router(bom_router)
+app.include_router(production_router)

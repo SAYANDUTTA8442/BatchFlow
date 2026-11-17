@@ -281,7 +281,7 @@ id BIGINT identity primary key; bom_id BIGINT FK → boms.id NOT NULL; inventory
 
 Unique: (bom_id, inventory_item_id). The referenced item category must match line_type. Carton capacity is product-specific packaging configuration, not a generic unit conversion.
 
-**Implemented in migration `0006_boms`:** BOM headers and lines, per-product version uniqueness, positive quantity/effective-range constraints, draft-only line/header mutation triggers, and the controlled ACTIVE-to-RETIRED transition. The API assigns versions while holding the product row lock, validates component category against line_type, rejects overlapping active effective-date ranges, and calculates scaled planned quantities with Decimal. Production-run snapshots and posting remain unimplemented.
+**Implemented in migration `0006_boms`:** BOM headers and lines, per-product version uniqueness, positive quantity/effective-range constraints, draft-only line/header mutation triggers, and the controlled ACTIVE-to-RETIRED transition. The API assigns versions while holding the product row lock, validates component category against line_type, rejects overlapping active effective-date ranges, and calculates scaled planned quantities with Decimal. **Implemented in migration `0007_production_plans`:** draft production-run headers and BOM-derived planned component snapshots. Actual consumption, outputs, cost lines and posting remain unimplemented.
 
 ### 6.3 production_runs
 
@@ -891,3 +891,10 @@ Exact migration grouping may change to resolve circular foreign keys. Do not cre
 ---
 
 **BatchFlow — From Order to Audit.**
+
+
+### 6.3.1 Implemented draft-plan snapshot extension
+
+Migration `0007_production_plans` adds product SKU/name, finished-good item code/name, output-unit code, BOM ID/version, batch multiplier, scaled expected output, production date, supervisor and DRAFT lifecycle fields to `production_runs`. `production_run_lines` stores the source inventory-item FK plus line type, item code/name/base-unit snapshots, BOM quantity-per-batch snapshot and scaled planned quantity.
+
+The current migration deliberately does not create actual-quantity, variance, unit-cost, line-cost, output, or overhead-cost records. Those belong to production execution/posting and will be added with the posting implementation. The run snapshots are not recomputed from current master data or BOM records. Planning creates no stock movements and changes no inventory projections.

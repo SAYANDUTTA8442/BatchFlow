@@ -918,3 +918,23 @@ Do not begin with dashboards. Prove the transaction engine first.
 ---
 
 **BatchFlow — From Order to Audit.**
+
+
+## 20. Draft production-run planning (implemented)
+
+Draft-plan creation is not a stock posting operation.
+
+Within one database transaction, the planning service:
+
+1. Locks the selected BOM row and loads its immutable activated lines.
+2. Requires the BOM to be ACTIVE or RETIRED and effective on the requested production date.
+3. Locks and validates the associated active product and finished-good inventory item.
+4. Locks BOM component inventory items in ascending item-ID order and validates active status/category.
+5. Calculates scaled expected output and each planned component quantity with Decimal, a 28-digit local context, six-place quantity precision and ROUND_HALF_UP.
+6. Persists product, finished-good, BOM-version and component identity/unit snapshots with DRAFT status.
+7. Assigns a unique run number and inserts a PRODUCTION_RUN_DRAFT_CREATED audit event.
+8. Commits the plan and audit event together.
+
+The BOM row lock serializes plan creation against BOM retirement. The plan uses the BOM version and master-data snapshots captured in this transaction; later edits to product/item names or other master data do not rewrite it.
+
+No stock movement, inventory balance, inventory valuation, actual consumption, finished-good output, production cost or variance is written during planning. Those effects are reserved for the separate production-posting transaction. A DRAFT plan is not evidence that materials were issued or goods were produced.
