@@ -59,7 +59,8 @@ class StockMovementRead(ORMRead):
     quantity_delta: Decimal
     unit_cost: Decimal | None
     extended_cost: Decimal | None
-    stock_adjustment_line_id: int
+    stock_adjustment_line_id: int | None
+    purchase_receipt_line_id: int | None
     reverses_movement_id: int | None
     posted_at: object
     posted_by_user_id: int | None
