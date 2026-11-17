@@ -18,7 +18,7 @@ class Settings(BaseSettings):
         default="local", alias="APP_ENVIRONMENT"
     )
     database_url: str = Field(
-        default="postgresql+psycopg://batchflow:batchflow@localhost:5432/batchflow",
+        default="postgresql+psycopg://batchflow:change-me-local-only@localhost:5432/batchflow",
         alias="DATABASE_URL",
     )
     sqlalchemy_echo: bool = Field(default=False, alias="SQLALCHEMY_ECHO")
