@@ -94,7 +94,7 @@ def test_consumed_refresh_token_reuse_revokes_family(client: TestClient, user: U
         json={"email": user.email, "password": "A-Strong-Test-Password-123!"},
     )
     old_cookie = login.cookies.get("batchflow_refresh")
-    rotated = client.post("/api/auth/refresh", headers=origin, cookies=login.cookies)
+    rotated = client.post("/api/auth/refresh", headers=origin)
     assert rotated.status_code == 200
 
     client.cookies.set("batchflow_refresh", old_cookie, path="/api/auth/refresh")
@@ -225,12 +225,7 @@ def test_refresh_token_hash_is_persisted_but_raw_token_is_not(
     )
     assert login.status_code == 200
     raw_refresh = login.cookies.get("batchflow_refresh")
-    session_id = uuid.UUID(jwt.decode(
-        login.json()["access_token"],
-        get_settings().jwt_secret_key,
-        algorithms=["HS256"],
-        options={"verify_signature": False, "verify_exp": False, "verify_aud": False},
-    )["sid"])
+    session_id = uuid.UUID(decode_access_token(login.json()["access_token"])["sid"])
     stored_hash = db.scalar(
         select(AuthRefreshToken.token_hash).where(AuthRefreshToken.session_id == session_id)
     )
