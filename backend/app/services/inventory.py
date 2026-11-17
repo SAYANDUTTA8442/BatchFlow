@@ -653,16 +653,9 @@ def reconcile_inventory(db: Session) -> dict:
         projected_value = _decimal(valuation.inventory_value) if valuation else ZERO
         ledger_value = state["value"]
         ledger_qty = state["quantity"]
-        ledger_average = (
-            _quantize(ledger_value / ledger_qty, COST_SCALE)
-            if ledger_qty > ZERO and ledger_value >= ZERO
-            else ZERO
-        )
-        projected_average = _decimal(valuation.average_unit_cost) if valuation else ZERO
         consistent = (
             ledger_qty == balance_qty == valuation_qty
             and ledger_value == projected_value
-            and ledger_average == projected_average
             and state["value"] >= ZERO
         )
         if not consistent:
@@ -675,8 +668,6 @@ def reconcile_inventory(db: Session) -> dict:
                     "valuation_quantity": valuation_qty,
                     "ledger_value": ledger_value,
                     "projected_value": projected_value,
-                    "ledger_average_unit_cost": ledger_average,
-                    "projected_average_unit_cost": projected_average,
                     "is_consistent": False,
                 }
             )

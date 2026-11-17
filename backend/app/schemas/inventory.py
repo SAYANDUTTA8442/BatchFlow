@@ -1,4 +1,3 @@
-from datetime import datetime
 from decimal import Decimal
 from typing import Literal
 
@@ -59,8 +58,7 @@ class StockMovementRead(ORMRead):
     quantity_delta: Decimal
     unit_cost: Decimal | None
     extended_cost: Decimal | None
-    stock_adjustment_line_id: int | None
-    purchase_receipt_line_id: int | None
+    stock_adjustment_line_id: int
     reverses_movement_id: int | None
     posted_at: object
     posted_by_user_id: int | None
@@ -79,7 +77,7 @@ class PurchaseReceiptCreate(BaseModel):
     receipt_number: str = Field(min_length=1, max_length=60)
     supplier_id: int = Field(gt=0)
     supplier_invoice_number: str | None = Field(default=None, min_length=1, max_length=80)
-    received_at: datetime
+    received_at: object
     note: str | None = Field(default=None, max_length=4000)
     lines: list[PurchaseReceiptLineCreate] = Field(min_length=1, max_length=200)
 
@@ -113,8 +111,6 @@ class InventoryReconciliationItem(BaseModel):
     valuation_quantity: Decimal
     ledger_value: Decimal
     projected_value: Decimal
-    ledger_average_unit_cost: Decimal
-    projected_average_unit_cost: Decimal
     is_consistent: bool
 
 
